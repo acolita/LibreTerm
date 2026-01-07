@@ -1,0 +1,12 @@
+build/
+*.obj
+*.exe
+*.res
+*.pdb
+*.ilk
+*.suo
+*.sln
+*.vcxproj
+*.user
+.vs/
+connections.ini
