@@ -6,6 +6,12 @@
 #define IDM_FILE_NEW        103
 #define IDM_FILE_SETTINGS   104
 
+// Main Window Controls
+#define IDC_TREEVIEW        1001
+#define IDC_TABCONTROL      1002
+#define IDC_STATUSBAR       1003
+#define IDC_SEARCH_EDIT     1004
+
 // Dialogs
 #define IDD_CONNECTION      200
 #define IDD_SETTINGS        210

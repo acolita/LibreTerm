@@ -286,21 +286,37 @@ void MainWindow::OnCreate()
     icex.dwICC = ICC_TREEVIEW_CLASSES | ICC_TAB_CLASSES | ICC_BAR_CLASSES;
     InitCommonControlsEx(&icex);
 
-    m_hSearchEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"",
-        WS_VISIBLE | WS_CHILD | ES_AUTOHSCROLL,
-        0, 0, 0, 0,
-        m_hwnd, (HMENU)IDC_EDIT_SEARCH, GetModuleHandle(NULL), NULL);
-    
-    // Subclass Search Edit for Ctrl+A
-    SetWindowSubclass(m_hSearchEdit, EditCtrlSubclassProc, 0, 0);
-    
-    // Set a smaller font for search
-    SendMessage(m_hSearchEdit, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+        m_hSearchEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"",
 
-    m_hTreeView = CreateWindowEx(0, WC_TREEVIEW, L"Connections",
-        WS_VISIBLE | WS_CHILD | WS_BORDER | TVS_HASLINES | TVS_LINESATROOT | TVS_HASBUTTONS | TVS_SHOWSELALWAYS,
-        0, 0, 0, 0,
-        m_hwnd, NULL, GetModuleHandle(NULL), NULL);
+            WS_VISIBLE | WS_CHILD | ES_AUTOHSCROLL,
+
+            0, 0, 0, 0,
+
+            m_hwnd, (HMENU)IDC_SEARCH_EDIT, GetModuleHandle(NULL), NULL);
+
+        
+
+        // Subclass Search Edit for Ctrl+A
+
+        SetWindowSubclass(m_hSearchEdit, EditCtrlSubclassProc, 0, 0);
+
+        
+
+        // Set a smaller font for search
+
+        SendMessage(m_hSearchEdit, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
+    
+
+        m_hTreeView = CreateWindowEx(0, WC_TREEVIEW, L"Connections",
+
+            WS_VISIBLE | WS_CHILD | WS_BORDER | TVS_HASLINES | TVS_LINESATROOT | TVS_HASBUTTONS | TVS_SHOWSELALWAYS,
+
+            0, 0, 0, 0,
+
+            m_hwnd, (HMENU)IDC_TREEVIEW, GetModuleHandle(NULL), NULL);
+
+    
 
         m_hTabControl = CreateWindowEx(0, WC_TABCONTROL, L"",
 
@@ -308,9 +324,9 @@ void MainWindow::OnCreate()
 
             0, 0, 0, 0,
 
-            m_hwnd, NULL, GetModuleHandle(NULL), NULL);
+            m_hwnd, (HMENU)IDC_TABCONTROL, GetModuleHandle(NULL), NULL);
 
-        
+    
 
         SetWindowSubclass(m_hTabControl, TabCtrlSubclassProc, 0, 0);
 
@@ -318,10 +334,13 @@ void MainWindow::OnCreate()
 
         m_hStatusBar = CreateWindowEx(0, STATUSCLASSNAME, NULL,
 
-     
-        WS_VISIBLE | WS_CHILD | SBARS_SIZEGRIP,
-        0, 0, 0, 0,
-        m_hwnd, NULL, GetModuleHandle(NULL), NULL);
+            WS_VISIBLE | WS_CHILD | SBARS_SIZEGRIP,
+
+            0, 0, 0, 0,
+
+            m_hwnd, (HMENU)IDC_STATUSBAR, GetModuleHandle(NULL), NULL);
+
+    
 
     m_hImageList = ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 2, 1);
     m_hTabImageList = ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 2, 1);
