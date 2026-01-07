@@ -33,6 +33,8 @@ public:
     static INT_PTR CALLBACK ConnectionDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
     static INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
     static INT_PTR CALLBACK QuickConnectDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+    static INT_PTR CALLBACK CredentialManagerDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+    static INT_PTR CALLBACK CredentialEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
     struct SettingsData {
         std::wstring puttyPath;
@@ -59,8 +61,6 @@ private:
     std::vector<Connection> m_allConnections;
 
     // Layout
-
-
     int m_treeWidth;
     bool m_isResizing;
     bool m_broadcastMode;
@@ -90,6 +90,7 @@ private:
     void OnDuplicateSession();
     void OnQuickConnect();
     void OnSettings();
+    void OnCredentialManager();
     void FilterConnections(const std::wstring& query);
     void ToggleBroadcast();
 };

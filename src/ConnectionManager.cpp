@@ -41,43 +41,61 @@ std::vector<Connection> ConnectionManager::LoadConnections() {
         GetPrivateProfileString(section.c_str(), L"Port", L"22", buf, 256, path.c_str());
         c.port = buf;
 
-        GetPrivateProfileString(section.c_str(), L"User", L"", buf, 256, path.c_str());
-        c.user = buf;
+                GetPrivateProfileString(section.c_str(), L"User", L"", buf, 256, path.c_str()); c.user = buf;
 
-        GetPrivateProfileString(section.c_str(), L"Password", L"", buf, 256, path.c_str());
-        c.password = buf;
+                GetPrivateProfileString(section.c_str(), L"Password", L"", buf, 256, path.c_str()); c.password = buf;
 
-        GetPrivateProfileString(section.c_str(), L"Args", L"", buf, 256, path.c_str());
-        c.args = buf;
+                GetPrivateProfileString(section.c_str(), L"CredAlias", L"", buf, 256, path.c_str()); c.credentialAlias = buf;
 
-        GetPrivateProfileString(section.c_str(), L"Group", L"", buf, 256, path.c_str());
-        c.group = buf;
+                GetPrivateProfileString(section.c_str(), L"Args", L"", buf, 256, path.c_str()); c.args = buf;
 
-        conns.push_back(c);
-    }
-    return conns;
-}
+                GetPrivateProfileString(section.c_str(), L"Group", L"", buf, 256, path.c_str()); c.group = buf;
 
-void ConnectionManager::SaveConnections(const std::vector<Connection>& conns) {
-    std::wstring path = GetConfigPath();
-    
-    std::wstring countStr = std::to_wstring(conns.size());
-    WritePrivateProfileString(L"Sessions", L"Count", countStr.c_str(), path.c_str());
+                conns.push_back(c);
 
-    for (size_t i = 0; i < conns.size(); ++i) {
-        std::wstringstream ss;
-        ss << L"Session_" << i;
-        std::wstring section = ss.str();
+            }
 
-        WritePrivateProfileString(section.c_str(), L"Name", conns[i].name.c_str(), path.c_str());
-        WritePrivateProfileString(section.c_str(), L"Host", conns[i].host.c_str(), path.c_str());
-        WritePrivateProfileString(section.c_str(), L"Port", conns[i].port.c_str(), path.c_str());
-        WritePrivateProfileString(section.c_str(), L"User", conns[i].user.c_str(), path.c_str());
-        WritePrivateProfileString(section.c_str(), L"Password", conns[i].password.c_str(), path.c_str());
-        WritePrivateProfileString(section.c_str(), L"Args", conns[i].args.c_str(), path.c_str());
-        WritePrivateProfileString(section.c_str(), L"Group", conns[i].group.c_str(), path.c_str());
-    }
-}
+            return conns;
+
+        }
+
+        
+
+        void ConnectionManager::SaveConnections(const std::vector<Connection>& conns) {
+
+            std::wstring path = GetConfigPath();
+
+            std::wstring countStr = std::to_wstring(conns.size());
+
+            WritePrivateProfileString(L"Sessions", L"Count", countStr.c_str(), path.c_str());
+
+            for (size_t i = 0; i < conns.size(); ++i) {
+
+                std::wstringstream ss; ss << L"Session_" << i;
+
+                std::wstring section = ss.str();
+
+                WritePrivateProfileString(section.c_str(), L"Name", conns[i].name.c_str(), path.c_str());
+
+                WritePrivateProfileString(section.c_str(), L"Host", conns[i].host.c_str(), path.c_str());
+
+                WritePrivateProfileString(section.c_str(), L"Port", conns[i].port.c_str(), path.c_str());
+
+                WritePrivateProfileString(section.c_str(), L"User", conns[i].user.c_str(), path.c_str());
+
+                WritePrivateProfileString(section.c_str(), L"Password", conns[i].password.c_str(), path.c_str());
+
+                WritePrivateProfileString(section.c_str(), L"CredAlias", conns[i].credentialAlias.c_str(), path.c_str());
+
+                WritePrivateProfileString(section.c_str(), L"Args", conns[i].args.c_str(), path.c_str());
+
+                WritePrivateProfileString(section.c_str(), L"Group", conns[i].group.c_str(), path.c_str());
+
+            }
+
+        }
+
+        
 
 bool ConnectionManager::ExportToJson(const std::wstring& filePath, const std::vector<Connection>& conns) {
     std::wofstream file(filePath);

@@ -33,6 +33,6 @@ echo Compiling Resources...
 rc.exe /fo build/LibreTerm.res src/LibreTerm.rc
 
 echo Compiling...
-cl.exe /nologo /std:c++17 /EHsc /W4 /O2 /DUNICODE /D_UNICODE src/main.cpp src/MainWindow.cpp src/MainWindow_Actions.cpp src/MainWindow_Dialogs.cpp src/MainWindow_Session.cpp src/ProcessUtils.cpp src/ConnectionManager.cpp src/Subclass.cpp src/InputHook.cpp build/LibreTerm.res /Fe:build/LibreTerm.exe /link user32.lib gdi32.lib comctl32.lib shell32.lib comdlg32.lib
+cl.exe /nologo /std:c++17 /EHsc /W4 /O2 /DUNICODE /D_UNICODE src/main.cpp src/MainWindow.cpp src/MainWindow_Actions.cpp src/MainWindow_Dialogs.cpp src/MainWindow_Session.cpp src/ProcessUtils.cpp src/ConnectionManager.cpp src/CredentialManager.cpp src/Subclass.cpp src/InputHook.cpp build/LibreTerm.res /Fe:build/LibreTerm.exe /link user32.lib gdi32.lib comctl32.lib shell32.lib comdlg32.lib
 
 echo Build successful! Output: build/LibreTerm.exe

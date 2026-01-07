@@ -89,6 +89,11 @@ void MainWindow::OnSettings()
     }
 }
 
+void MainWindow::OnCredentialManager()
+{
+    DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_CREDENTIAL_MANAGER), m_hwnd, CredentialManagerDialogProc);
+}
+
 void MainWindow::ToggleBroadcast()
 {
     m_broadcastMode = !m_broadcastMode;

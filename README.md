@@ -1,24 +1,42 @@
 # LibreTerm
 
-**LibreTerm** is an open-source clone of WinSSHTerm.
+**LibreTerm** is a high-performance, open-source tabbed SSH solution for Windows. It acts as a powerful wrapper for PuTTY and WinSCP, providing a centralized and organized environment for remote server management.
 
-## Goal
-To provide a free, open-source alternative to WinSSHTerm with similar functionality for managing SSH connections and terminal sessions on Windows.
+## Key Features
 
-## Features
-- **Native Win32 C++ Application**: Fast, lightweight, and low memory usage.
-- **Multi-Tab Interface**: Manage multiple SSH sessions in tabs.
-- **PuTTY Integration**: Embeds PuTTY windows directly into tabs.
-- **WinSCP Integration**: Launch file transfer sessions with a single click.
-- **Connection Manager**: Organize connections into folders.
-- **Password Support**: Save passwords (plain text) for auto-login.
-- **Keyboard Shortcuts**: `Ctrl+Tab`, `Ctrl+W`, etc.
-- **Portable**: Can be configured to store settings locally (currently %APPDATA%).
+- **Native Performance**: Written in pure C++ using the Win32 API. No heavy frameworks, no Electron. Just raw speed and minimal memory footprint.
+- **Window Embedding**: Seamlessly embeds PuTTY windows directly into tabs for a unified workspace.
+- **Credential Manager (v1.0.0)**: Create reusable authentication profiles (Alias -> User/Pass/Key). Share one credential across multiple connections.
+- **Organization**: Group connections into folders with a real-time searchable sidebar.
+- **WinSCP Integration**: One-click file transfer for any active connection.
+- **Productivity Shortcuts**:
+  - `Ctrl + Tab` / `Ctrl + Shift + Tab`: Switch between terminal sessions.
+  - `Ctrl + W`: Close the active session.
+  - `Ctrl + Q`: Quick Connect without saving to list.
+  - `Ctrl + A`: Select all in any input field.
+- **Draggable Splitter**: Easily resize the sidebar to fit your workspace.
+- **State Persistence**: Remembers window size, position, maximized state, and sidebar width between sessions.
+- **CI/CD Integrated**: Automated builds and releases via GitHub Actions.
+- **Automated QA**: Comprehensive E2E test suite using Microsoft WinAppDriver.
 
-## Building
-1.  Ensure Visual Studio 2022 (with C++ workload) is installed.
-2.  Run `build.bat`.
-3.  The executable will be in `build/LibreTerm.exe`.
+## Prerequisites
+
+- **PuTTY**: Ensure `putty.exe` is in your system `PATH` or configure the path in `File -> Settings`.
+- **WinSCP** (Optional): For file transfer support.
+
+## Building from Source
+
+1.  Install **Visual Studio 2022** with the "Desktop development with C++" workload.
+2.  Clone the repository.
+3.  Run `build.bat`.
+4.  The compiled executable will be located in `build/LibreTerm.exe`.
+
+## Running E2E Tests
+
+1.  Ensure [WinAppDriver](https://github.com/microsoft/WinAppDriver) is installed.
+2.  Ensure Python 3.x is installed.
+3.  Run `run_tests.bat`. This will install dependencies and execute the test suite.
 
 ## License
+
 MIT

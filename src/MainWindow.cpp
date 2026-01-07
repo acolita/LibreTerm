@@ -183,6 +183,7 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             case IDM_TAB_CLOSE_ALL: while (TabCtrl_GetItemCount(pThis->m_hTabControl) > 0) pThis->CloseTab(0); break;
             case IDM_TAB_DUPLICATE: pThis->OnDuplicateSession(); break;
             case IDM_TOOLS_MULTI_INPUT: pThis->ToggleBroadcast(); break;
+            case IDM_TOOLS_CREDENTIALS: pThis->OnCredentialManager(); break;
             }
             return 0;
 

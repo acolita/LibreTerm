@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "ProcessUtils.h"
+#include "CredentialManager.h"
 
 void MainWindow::LaunchSession(const Connection& conn)
 {
@@ -8,15 +9,26 @@ void MainWindow::LaunchSession(const Connection& conn)
         cmd = L"\"" + cmd + L"\"";
     }
     
+    // Resolve Credential
+    std::wstring user = conn.user;
+    std::wstring password = conn.password;
+    if (!conn.credentialAlias.empty()) {
+        Credential c = CredentialManager::GetCredential(conn.credentialAlias);
+        if (!c.alias.empty()) {
+            user = c.username;
+            password = c.password;
+        }
+    }
+    
     // Options first
     cmd += L" -ssh"; 
-    if (!conn.password.empty()) cmd += L" -pw \"" + conn.password + L"\"";
+    if (!password.empty()) cmd += L" -pw \"" + password + L"\"";
     if (!conn.port.empty()) cmd += L" -P " + conn.port;
     if (!conn.args.empty()) cmd += L" " + conn.args;
     
     // Host last
     cmd += L" ";
-    if (!conn.user.empty()) cmd += conn.user + L"@";
+    if (!user.empty()) cmd += user + L"@";
     cmd += conn.host;
 
     DWORD pid = ProcessUtils::LaunchProcess(cmd);
@@ -34,7 +46,7 @@ void MainWindow::LaunchSession(const Connection& conn)
         Session* s = new Session{ hPutty, pid, conn.name, conn };
         m_sessions.push_back(s);
         
-        TCITEM tie; tie.mask = TCIF_TEXT | TCIF_PARAM | TCIF_IMAGE;
+        TCITEM tie; tie.mask = TCIF_TEXT | TCIF_PARAM | TCIF_IMAGE; 
         tie.pszText = (LPWSTR)s->name.c_str(); 
         tie.lParam = (LPARAM)s; 
         tie.iImage = 0; // Terminal icon
@@ -54,22 +66,33 @@ void MainWindow::LaunchWinSCP(const Connection& conn)
     if (cmd.find(L" ") != std::wstring::npos && cmd.front() != L'"') {
         cmd = L"\"" + cmd + L"\"";
     }
+    
+    // Resolve Credential
+    std::wstring user = conn.user;
+    std::wstring password = conn.password;
+    if (!conn.credentialAlias.empty()) {
+        Credential c = CredentialManager::GetCredential(conn.credentialAlias);
+        if (!c.alias.empty()) {
+            user = c.username;
+            password = c.password;
+        }
+    }
+
     // Format: sftp://user:pass@host:port/
     cmd += L" sftp://"; 
-    if (!conn.user.empty()) cmd += conn.user + L"@";
+    if (!user.empty()) cmd += user + L"@";
     cmd += conn.host; 
     if (!conn.port.empty()) cmd += L":" + conn.port;
     cmd += L"/";
     
-    if (!conn.password.empty()) {
-        cmd += L" /password=\"" + conn.password + L"\"";
+    if (!password.empty()) {
+        cmd += L" /password=\"" + password + L"\"";
     }
 
     if (ProcessUtils::LaunchProcess(cmd) == 0) {
         MessageBox(m_hwnd, (L"Failed to launch: " + cmd).c_str(), L"Error", MB_ICONERROR);
     }
 }
-
 void MainWindow::OnTabChange()
 {
     int sel = TabCtrl_GetCurSel(m_hTabControl);

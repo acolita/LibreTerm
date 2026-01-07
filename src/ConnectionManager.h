@@ -9,6 +9,7 @@ struct Connection {
     std::wstring port;
     std::wstring user;
     std::wstring password;
+    std::wstring credentialAlias;
     std::wstring args;
     std::wstring group;
 };

@@ -8,12 +8,14 @@
 #define IDM_FILE_QUICK_CONNECT 105
 #define IDM_FILE_IMPORT     106
 #define IDM_FILE_EXPORT     107
+#define IDM_TOOLS_CREDENTIALS 108
 
 // Dialogs
 #define IDD_CONNECTION      200
 #define IDD_SETTINGS        210
 #define IDD_QUICK_CONNECT   220
-
+#define IDD_CREDENTIAL_MANAGER 230
+#define IDD_CREDENTIAL_EDIT    240
 
 // Dialog Controls
 #define IDC_EDIT_NAME       201
@@ -34,6 +36,23 @@
 #define IDC_BUTTON_BROWSE   212
 #define IDC_EDIT_WINSCP_PATH 213
 #define IDC_BUTTON_BROWSE_WINSCP 214
+
+// Credential Manager Controls
+#define IDC_LIST_CREDENTIALS 231
+#define IDC_BTN_CRED_ADD     232
+#define IDC_BTN_CRED_EDIT    233
+#define IDC_BTN_CRED_DELETE  234
+
+// Credential Edit Controls
+#define IDC_EDIT_CRED_ALIAS  241
+#define IDC_EDIT_CRED_USER   242
+#define IDC_EDIT_CRED_PASS   243
+#define IDC_EDIT_CRED_KEY    244
+#define IDC_BTN_CRED_BROWSE  245
+
+// Connection Dialog Update
+#define IDC_COMBO_CREDENTIAL 209
+
 
 // Context Menu
 #define IDR_CONTEXT_MENU    300
