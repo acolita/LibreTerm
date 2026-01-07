@@ -15,4 +15,4 @@ if "%ERRORLEVEL%"=="0" (
 
 echo.
 echo Running Tests...
-pytest tests/test_basic.py -v
+pytest tests/ -v

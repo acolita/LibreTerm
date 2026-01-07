@@ -65,6 +65,7 @@ BOOL MainWindow::Create(PCWSTR lpWindowName, DWORD dwStyle, DWORD dwExStyle,
     HMENU hToolsMenu = CreateMenu();
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hToolsMenu, L"&Tools");
     AppendMenu(hToolsMenu, MF_STRING, IDM_TOOLS_MULTI_INPUT, L"&Multi-Input (Broadcast Mode)");
+    AppendMenu(hToolsMenu, MF_STRING, IDM_TOOLS_CREDENTIALS, L"&Credential Manager");
 
     HMENU hHelpMenu = CreateMenu();
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hHelpMenu, L"&Help");
