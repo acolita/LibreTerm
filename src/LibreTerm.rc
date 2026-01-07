@@ -63,6 +63,7 @@ BEGIN
         MENUITEM "Connect",      IDM_CTX_CONNECT
         MENUITEM "File Transfer", IDM_CTX_WINSCP
         MENUITEM "New Connection", IDM_CTX_NEW
+        MENUITEM "Clone",        IDM_CTX_CLONE
         MENUITEM SEPARATOR
         MENUITEM "Edit",         IDM_CTX_EDIT
         MENUITEM "Delete",       IDM_CTX_DELETE
@@ -73,6 +74,8 @@ IDR_TAB_MENU MENU
 BEGIN
     POPUP "TabContext"
     BEGIN
+        MENUITEM "Duplicate",       IDM_TAB_DUPLICATE
+        MENUITEM SEPARATOR
         MENUITEM "Close",           IDM_TAB_CLOSE
         MENUITEM "Close All",       IDM_TAB_CLOSE_ALL
     END

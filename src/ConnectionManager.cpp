@@ -110,8 +110,114 @@ std::wstring ConnectionManager::LoadWinSCPPath() {
 
 void ConnectionManager::SaveWinSCPPath(const std::wstring& winscpPath) {
 
+
+
     std::wstring path = GetConfigPath();
+
+
 
     WritePrivateProfileString(L"Settings", L"WinSCPPath", winscpPath.c_str(), path.c_str());
 
+
+
 }
+
+
+
+
+
+
+
+ConnectionManager::WindowState ConnectionManager::LoadWindowState() {
+
+
+
+    WindowState state = { CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, false, 250 };
+
+
+
+    std::wstring path = GetConfigPath();
+
+
+
+    
+
+
+
+    state.x = GetPrivateProfileInt(L"Window", L"X", CW_USEDEFAULT, path.c_str());
+
+
+
+    state.y = GetPrivateProfileInt(L"Window", L"Y", CW_USEDEFAULT, path.c_str());
+
+
+
+    state.width = GetPrivateProfileInt(L"Window", L"Width", CW_USEDEFAULT, path.c_str());
+
+
+
+    state.height = GetPrivateProfileInt(L"Window", L"Height", CW_USEDEFAULT, path.c_str());
+
+
+
+    state.maximized = GetPrivateProfileInt(L"Window", L"Maximized", 0, path.c_str()) != 0;
+
+
+
+    state.sidebarWidth = GetPrivateProfileInt(L"Window", L"SidebarWidth", 250, path.c_str());
+
+
+
+    
+
+
+
+    return state;
+
+
+
+}
+
+
+
+
+
+
+
+void ConnectionManager::SaveWindowState(const WindowState& state) {
+
+
+
+    std::wstring path = GetConfigPath();
+
+
+
+    WritePrivateProfileString(L"Window", L"X", std::to_wstring(state.x).c_str(), path.c_str());
+
+
+
+    WritePrivateProfileString(L"Window", L"Y", std::to_wstring(state.y).c_str(), path.c_str());
+
+
+
+    WritePrivateProfileString(L"Window", L"Width", std::to_wstring(state.width).c_str(), path.c_str());
+
+
+
+    WritePrivateProfileString(L"Window", L"Height", std::to_wstring(state.height).c_str(), path.c_str());
+
+
+
+    WritePrivateProfileString(L"Window", L"Maximized", state.maximized ? L"1" : L"0", path.c_str());
+
+
+
+    WritePrivateProfileString(L"Window", L"SidebarWidth", std::to_wstring(state.sidebarWidth).c_str(), path.c_str());
+
+
+
+}
+
+
+
+

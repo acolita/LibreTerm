@@ -13,6 +13,7 @@ struct Session {
     HWND hEmbedded;
     DWORD pid;
     std::wstring name;
+    Connection conn; // Store connection info for duplication
 };
 
 class MainWindow
@@ -39,6 +40,7 @@ public:
 private:
     HWND m_hwnd;
     HWND m_hTreeView;
+    HWND m_hSearchEdit;
     HWND m_hTabControl;
     HWND m_hStatusBar;
 
@@ -66,7 +68,6 @@ private:
     // Helper to register class
     static void RegisterWindowClass();
 
-
     void LaunchSession(const Connection& conn);
     void LaunchWinSCP(const Connection& conn);
     void ResizeSession(Session* session);
@@ -76,5 +77,13 @@ private:
     void OnNewConnection();
     void OnEditConnection();
     void OnDeleteConnection();
-    void OnSettings();
-};
+    void OnCloneConnection();
+    void OnDuplicateSession();
+        void OnSettings();
+        void FilterConnections(const std::wstring& query);
+    };
+    
+    // Helpers in Subclass.cpp
+    LRESULT CALLBACK EditCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+    void SubclassEdit(HWND hDlg, int nIDDlgItem);
+    

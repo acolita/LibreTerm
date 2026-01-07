@@ -24,4 +24,12 @@ public:
 
     static std::wstring LoadWinSCPPath();
     static void SaveWinSCPPath(const std::wstring& path);
+
+    struct WindowState {
+        int x, y, width, height;
+        bool maximized;
+        int sidebarWidth;
+    };
+    static WindowState LoadWindowState();
+    static void SaveWindowState(const WindowState& state);
 };

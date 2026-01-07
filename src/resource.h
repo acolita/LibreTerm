@@ -18,6 +18,7 @@
 #define IDC_EDIT_PASSWORD   207
 #define IDC_EDIT_ARGS       205
 #define IDC_EDIT_GROUP      206
+#define IDC_EDIT_SEARCH     208
 
 #define IDC_EDIT_PUTTY_PATH 211
 #define IDC_BUTTON_BROWSE   212
@@ -31,10 +32,12 @@
 #define IDM_CTX_DELETE      303
 #define IDM_CTX_NEW         304
 #define IDM_CTX_WINSCP      305
+#define IDM_CTX_CLONE       306
 
 #define IDR_TAB_MENU        310
 #define IDM_TAB_CLOSE       311
 #define IDM_TAB_CLOSE_ALL   312
+#define IDM_TAB_DUPLICATE   313
 
 // Icons
 #define IDI_APPICON         400
