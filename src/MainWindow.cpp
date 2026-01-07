@@ -5,12 +5,19 @@
 #include <map>
 #include <algorithm>
 
-MainWindow::MainWindow() : m_hwnd(NULL), m_hTreeView(NULL), m_hSearchEdit(NULL), m_hTabControl(NULL), m_hStatusBar(NULL), m_treeWidth(250), m_isResizing(false), m_hImageList(NULL), m_hTabImageList(NULL)
+// Global pointer for hook
+extern MainWindow* g_pMainWindow;
+extern HHOOK g_hKeyboardHook;
+LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam);
+
+MainWindow::MainWindow() : m_hwnd(NULL), m_hTreeView(NULL), m_hSearchEdit(NULL), m_hTabControl(NULL), m_hStatusBar(NULL), m_treeWidth(250), m_isResizing(false), m_hImageList(NULL), m_hTabImageList(NULL), m_broadcastMode(false)
 {
+    g_pMainWindow = this;
 }
 
 MainWindow::~MainWindow()
 {
+    if (g_hKeyboardHook) UnhookWindowsHookEx(g_hKeyboardHook);
     for (Session* s : m_sessions) delete s;
     if (m_hImageList) ImageList_Destroy(m_hImageList);
     if (m_hTabImageList) ImageList_Destroy(m_hTabImageList);
@@ -49,6 +56,11 @@ BOOL MainWindow::Create(PCWSTR lpWindowName, DWORD dwStyle, DWORD dwExStyle,
     HMENU hHelpMenu = CreateMenu();
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hHelpMenu, L"&Help");
     AppendMenu(hHelpMenu, MF_STRING, IDM_HELP_ABOUT, L"&About");
+
+    HMENU hToolsMenu = CreateMenu();
+    AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hToolsMenu, L"&Tools");
+    AppendMenu(hToolsMenu, MF_STRING, IDM_TOOLS_MULTI_INPUT, L"&Multi-Input (Broadcast Mode)");
+    // Check/Uncheck handled in ToggleBroadcast
 
     m_hwnd = CreateWindowEx(dwExStyle, L"LIBRETERM_MainWindow", lpWindowName, dwStyle,
         x, y, nWidth, nHeight, hWndParent, hMenuBar, GetModuleHandle(NULL), this);
@@ -104,6 +116,10 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             return 0;
 
         case WM_COMMAND:
+            if (HIWORD(wParam) == 999 && (HWND)lParam == pThis->m_hTabControl) {
+                pThis->CloseTab(LOWORD(wParam));
+                return 0;
+            }
             if (lParam != 0 && (HWND)lParam == pThis->m_hSearchEdit && HIWORD(wParam) == EN_CHANGE) {
                 wchar_t buf[256];
                 GetWindowText(pThis->m_hSearchEdit, buf, 256);
@@ -166,6 +182,9 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                 break;
             case IDM_TAB_DUPLICATE:
                 pThis->OnDuplicateSession();
+                break;
+            case IDM_TOOLS_MULTI_INPUT:
+                pThis->ToggleBroadcast();
                 break;
             }
             return 0;
@@ -283,12 +302,23 @@ void MainWindow::OnCreate()
         0, 0, 0, 0,
         m_hwnd, NULL, GetModuleHandle(NULL), NULL);
 
-    m_hTabControl = CreateWindowEx(0, WC_TABCONTROL, L"",
-        WS_VISIBLE | WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
-        0, 0, 0, 0,
-        m_hwnd, NULL, GetModuleHandle(NULL), NULL);
+        m_hTabControl = CreateWindowEx(0, WC_TABCONTROL, L"",
 
-    m_hStatusBar = CreateWindowEx(0, STATUSCLASSNAME, NULL, 
+            WS_VISIBLE | WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+
+            0, 0, 0, 0,
+
+            m_hwnd, NULL, GetModuleHandle(NULL), NULL);
+
+        
+
+        SetWindowSubclass(m_hTabControl, TabCtrlSubclassProc, 0, 0);
+
+    
+
+        m_hStatusBar = CreateWindowEx(0, STATUSCLASSNAME, NULL,
+
+     
         WS_VISIBLE | WS_CHILD | SBARS_SIZEGRIP,
         0, 0, 0, 0,
         m_hwnd, NULL, GetModuleHandle(NULL), NULL);
@@ -497,6 +527,82 @@ void MainWindow::OnSettings()
     }
 }
 
+bool MainWindow::IsSourceOfFocus() {
+    HWND hForeground = GetForegroundWindow();
+    if (hForeground != m_hwnd && !IsChild(m_hwnd, hForeground)) {
+        // If foreground is not us or our children, check if it's one of the embedded windows
+        // Actually, SetParent makes them children. So IsChild(m_hwnd, hForeground) should be true if PuTTY is focused.
+        // But GetForegroundWindow returns the top-level window.
+        // If PuTTY is embedded, GetForegroundWindow() == m_hwnd.
+        if (hForeground != m_hwnd) return false; 
+    }
+
+    // Now check which session specifically has focus
+    for (Session* s : m_sessions) {
+        DWORD dwThreadId = GetWindowThreadProcessId(s->hEmbedded, NULL);
+        GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
+        if (GetGUIThreadInfo(dwThreadId, &gti)) {
+            if (gti.hwndFocus) {
+                // Focus is within this session's thread
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void MainWindow::BroadcastKey(UINT msg, WPARAM wParam, LPARAM lParam) {
+    // 1. Identify the Source Session
+    Session* pSource = NULL;
+    for (Session* s : m_sessions) {
+        DWORD dwThreadId = GetWindowThreadProcessId(s->hEmbedded, NULL);
+        GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
+        if (GetGUIThreadInfo(dwThreadId, &gti)) {
+            if (gti.hwndFocus) {
+                pSource = s;
+                break;
+            }
+        }
+    }
+
+    // If we can't identify the source, ABORT to avoid sending keys back to the active window (Double Typing Bug)
+    if (!pSource) return;
+
+    // 2. Broadcast to others
+    for (Session* s : m_sessions) {
+        if (s != pSource) {
+            // Find the terminal window. PuTTY's main window usually wraps the terminal.
+            // If we send to the wrapper, it might ignore it if not focused.
+            // Let's try sending to the first child (the terminal surface) if it exists.
+            HWND hTarget = GetWindow(s->hEmbedded, GW_CHILD);
+            if (!hTarget) hTarget = s->hEmbedded;
+
+            PostMessage(hTarget, msg, wParam, lParam);
+        }
+    }
+}
+
+void MainWindow::ToggleBroadcast()
+{
+    m_broadcastMode = !m_broadcastMode;
+    HMENU hMenu = GetMenu(m_hwnd);
+    HMENU hTools = GetSubMenu(hMenu, 2);
+    CheckMenuItem(hTools, IDM_TOOLS_MULTI_INPUT, m_broadcastMode ? MF_CHECKED : MF_UNCHECKED);
+    
+    if (m_broadcastMode) {
+        if (!g_hKeyboardHook) {
+            g_hKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardHookProc, GetModuleHandle(NULL), 0);
+        }
+        SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)L"*** BROADCAST MODE ACTIVE ***");
+    } else {
+        if (g_hKeyboardHook) {
+            UnhookWindowsHookEx(g_hKeyboardHook);
+            g_hKeyboardHook = NULL;
+        }
+        SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)L"Broadcast Disabled");
+    }
+}
+
 LRESULT MainWindow::OnNotify(LPARAM lParam)
 {
     LPNMHDR pHdr = (LPNMHDR)lParam;
@@ -596,7 +702,16 @@ void MainWindow::CloseTab(int index)
         Session* s = (Session*)tie.lParam;
         HANDLE hP = OpenProcess(PROCESS_TERMINATE, FALSE, s->pid); if (hP) { TerminateProcess(hP, 0); CloseHandle(hP); }
         for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it) { if (*it == s) { delete s; m_sessions.erase(it); break; } }
-        TabCtrl_DeleteItem(m_hTabControl, index); OnTabChange();
+        TabCtrl_DeleteItem(m_hTabControl, index); 
+        
+        // Select new tab
+        int count = TabCtrl_GetItemCount(m_hTabControl);
+        if (count > 0) {
+            int newSel = (index >= count) ? count - 1 : index;
+            TabCtrl_SetCurSel(m_hTabControl, newSel);
+        }
+        
+        OnTabChange();
     }
 }
 

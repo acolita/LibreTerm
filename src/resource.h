@@ -34,6 +34,8 @@
 #define IDM_CTX_WINSCP      305
 #define IDM_CTX_CLONE       306
 
+#define IDM_TOOLS_MULTI_INPUT 320
+
 #define IDR_TAB_MENU        310
 #define IDM_TAB_CLOSE       311
 #define IDM_TAB_CLOSE_ALL   312

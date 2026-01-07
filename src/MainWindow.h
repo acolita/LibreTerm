@@ -37,6 +37,11 @@ public:
     };
     static INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
+    // Broadcast Helpers - Public for Hook
+    bool IsBroadcastActive() const { return m_broadcastMode; }
+    bool IsSourceOfFocus();
+    void BroadcastKey(UINT msg, WPARAM wParam, LPARAM lParam);
+
 private:
     HWND m_hwnd;
     HWND m_hTreeView;
@@ -54,6 +59,7 @@ private:
     // Layout
     int m_treeWidth;
     bool m_isResizing;
+    bool m_broadcastMode;
     std::wstring m_puttyPath;
     std::wstring m_winscpPath;
 
@@ -79,11 +85,13 @@ private:
     void OnDeleteConnection();
     void OnCloneConnection();
     void OnDuplicateSession();
-        void OnSettings();
-        void FilterConnections(const std::wstring& query);
-    };
-    
-    // Helpers in Subclass.cpp
+                void OnSettings();
+                void FilterConnections(const std::wstring& query);
+                void ToggleBroadcast();
+            };
+            
+            // Helpers in Subclass.cpp
     LRESULT CALLBACK EditCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+    LRESULT CALLBACK TabCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
     void SubclassEdit(HWND hDlg, int nIDDlgItem);
     
