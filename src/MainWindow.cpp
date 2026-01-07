@@ -5,9 +5,13 @@
 #include <map>
 #include <algorithm>
 
-extern MainWindow* g_pMainWindow;
-extern HHOOK g_hKeyboardHook;
-LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam);
+// Global pointer for hook (used in InputHook.cpp)
+MainWindow* g_pMainWindow = NULL;
+
+// Helpers in Subclass.cpp
+LRESULT CALLBACK EditCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+LRESULT CALLBACK TabCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+void SubclassEdit(HWND hDlg, int nIDDlgItem);
 
 MainWindow::MainWindow() : m_hwnd(NULL), m_hTreeView(NULL), m_hSearchEdit(NULL), m_hTabControl(NULL), m_hStatusBar(NULL), m_treeWidth(250), m_isResizing(false), m_hImageList(NULL), m_hTabImageList(NULL), m_broadcastMode(false), m_hDragItem(NULL)
 {
@@ -16,7 +20,8 @@ MainWindow::MainWindow() : m_hwnd(NULL), m_hTreeView(NULL), m_hSearchEdit(NULL),
 
 MainWindow::~MainWindow()
 {
-    if (g_hKeyboardHook) UnhookWindowsHookEx(g_hKeyboardHook);
+    // Unhook logic handled in InputHook but we should ensure it's clean
+    // For now, assuming InputHook cleans up or we call ToggleBroadcast(false)
     for (Session* s : m_sessions) delete s;
     if (m_hImageList) ImageList_Destroy(m_hImageList);
     if (m_hTabImageList) ImageList_Destroy(m_hTabImageList);
@@ -26,12 +31,14 @@ void MainWindow::RegisterWindowClass()
 {
     static bool registered = false;
     if (registered) return;
+
     WNDCLASS wc = { 0 };
     wc.lpfnWndProc = MainWindow::WindowProc;
     wc.hInstance = GetModuleHandle(NULL);
     wc.lpszClassName = L"LIBRETERM_MainWindow";
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+
     RegisterClass(&wc);
     registered = true;
 }
@@ -41,6 +48,7 @@ BOOL MainWindow::Create(PCWSTR lpWindowName, DWORD dwStyle, DWORD dwExStyle,
     HWND hWndParent, HMENU /*hMenu*/)
 {
     RegisterWindowClass();
+
     HMENU hMenuBar = CreateMenu();
     HMENU hFileMenu = CreateMenu();
     AppendMenu(hFileMenu, MF_STRING, IDM_FILE_NEW, L"&New Connection");
@@ -53,87 +61,121 @@ BOOL MainWindow::Create(PCWSTR lpWindowName, DWORD dwStyle, DWORD dwExStyle,
     AppendMenu(hFileMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hFileMenu, MF_STRING, IDM_FILE_EXIT, L"E&xit");
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hFileMenu, L"&File");
-    HMENU hHelpMenu = CreateMenu();
-    AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hHelpMenu, L"&Help");
-    AppendMenu(hHelpMenu, MF_STRING, IDM_HELP_ABOUT, L"&About");
+
     HMENU hToolsMenu = CreateMenu();
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hToolsMenu, L"&Tools");
     AppendMenu(hToolsMenu, MF_STRING, IDM_TOOLS_MULTI_INPUT, L"&Multi-Input (Broadcast Mode)");
+
+    HMENU hHelpMenu = CreateMenu();
+    AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hHelpMenu, L"&Help");
+    AppendMenu(hHelpMenu, MF_STRING, IDM_HELP_ABOUT, L"&About");
+
     m_hwnd = CreateWindowEx(dwExStyle, L"LIBRETERM_MainWindow", lpWindowName, dwStyle,
         x, y, nWidth, nHeight, hWndParent, hMenuBar, GetModuleHandle(NULL), this);
+
     return (m_hwnd ? TRUE : FALSE);
 }
 
-void MainWindow::Show(int nCmdShow) { ShowWindow(m_hwnd, nCmdShow); }
+void MainWindow::Show(int nCmdShow)
+{
+    ShowWindow(m_hwnd, nCmdShow);
+}
 
 LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     MainWindow* pThis = (MainWindow*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
-    if (uMsg == WM_NCCREATE) {
+
+    if (uMsg == WM_NCCREATE)
+    {
         CREATESTRUCT* pCreate = (CREATESTRUCT*)lParam;
         pThis = (MainWindow*)pCreate->lpCreateParams;
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pThis);
         pThis->m_hwnd = hwnd;
     }
-    if (pThis) {
-        switch (uMsg) {
+
+    if (pThis)
+    {
+        switch (uMsg)
+        {
         case WM_CREATE: pThis->OnCreate(); return 0;
         case WM_SIZE: pThis->OnSize(LOWORD(lParam), HIWORD(lParam)); return 0;
         case WM_NOTIFY: return pThis->OnNotify(lParam);
-        case WM_SETFOCUS: {
-            int sel = TabCtrl_GetCurSel(pThis->m_hTabControl);
-            if (sel != -1) {
-                TCITEM tie; tie.mask = TCIF_PARAM;
-                if (TabCtrl_GetItem(pThis->m_hTabControl, sel, &tie)) {
-                    Session* s = (Session*)tie.lParam;
-                    if (IsWindow(s->hEmbedded)) SetFocus(s->hEmbedded);
+        
+        case WM_SETFOCUS:
+            {
+                int sel = TabCtrl_GetCurSel(pThis->m_hTabControl);
+                if (sel != -1) {
+                    TCITEM tie; tie.mask = TCIF_PARAM;
+                    if (TabCtrl_GetItem(pThis->m_hTabControl, sel, &tie)) {
+                        Session* s = (Session*)tie.lParam;
+                        if (IsWindow(s->hEmbedded)) SetFocus(s->hEmbedded);
+                    }
                 }
             }
             return 0;
-        }
+
         case WM_COMMAND:
-            if (HIWORD(wParam) == 999 && (HWND)lParam == pThis->m_hTabControl) { pThis->CloseTab(LOWORD(wParam)); return 0; }
+            if (HIWORD(wParam) == 999 && (HWND)lParam == pThis->m_hTabControl) {
+                pThis->CloseTab(LOWORD(wParam));
+                return 0;
+            }
             if (lParam != 0 && (HWND)lParam == pThis->m_hSearchEdit && HIWORD(wParam) == EN_CHANGE) {
                 wchar_t buf[256]; GetWindowText(pThis->m_hSearchEdit, buf, 256);
-                pThis->FilterConnections(buf); return 0;
+                pThis->FilterConnections(buf);
+                return 0;
             }
             switch (LOWORD(wParam)) {
             case IDM_FILE_EXIT: DestroyWindow(hwnd); break;
-            case IDM_HELP_ABOUT: MessageBox(hwnd, L"LibreTerm v0.9.0\n\n- Quick Connect\n- Import/Export (JSON)\n- Sorting\n- Drag & Drop\n- Multi-Input", L"About LibreTerm", MB_OK | MB_ICONINFORMATION); break;
+            case IDM_HELP_ABOUT: MessageBox(hwnd, L"LibreTerm v0.9.0", L"About", MB_OK); break;
+            
+            // Handled in MainWindow_Actions.cpp
             case IDM_FILE_NEW: pThis->OnNewConnection(); break;
             case IDM_FILE_SETTINGS: pThis->OnSettings(); break;
             case IDM_FILE_QUICK_CONNECT: pThis->OnQuickConnect(); break;
-            case IDM_FILE_IMPORT: {
-                OPENFILENAME ofn; wchar_t szFile[MAX_PATH] = { 0 }; ZeroMemory(&ofn, sizeof(ofn)); ofn.lStructSize = sizeof(ofn); ofn.hwndOwner = hwnd; ofn.lpstrFile = szFile; ofn.nMaxFile = sizeof(szFile); ofn.lpstrFilter = L"JSON Files\0*.json\0All Files\0*.*\0"; ofn.nFilterIndex = 1; ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-                if (GetOpenFileName(&ofn)) {
-                    auto imported = ConnectionManager::ImportFromJson(ofn.lpstrFile);
-                    if (!imported.empty()) {
-                        pThis->m_connections.insert(pThis->m_connections.end(), imported.begin(), imported.end());
-                        ConnectionManager::SaveConnections(pThis->m_connections);
-                        pThis->ReloadConnections();
-                        MessageBox(hwnd, L"Import successful!", L"Success", MB_OK);
+            
+            case IDM_FILE_IMPORT:
+                {
+                    OPENFILENAME ofn; wchar_t szFile[MAX_PATH] = { 0 }; ZeroMemory(&ofn, sizeof(ofn)); ofn.lStructSize = sizeof(ofn); ofn.hwndOwner = hwnd; ofn.lpstrFile = szFile; ofn.nMaxFile = sizeof(szFile); ofn.lpstrFilter = L"JSON Files\0*.json\0All Files\0*.*\0"; ofn.nFilterIndex = 1; ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+                    if (GetOpenFileName(&ofn)) {
+                        auto imported = ConnectionManager::ImportFromJson(ofn.lpstrFile);
+                        if (!imported.empty()) {
+                            pThis->m_allConnections.insert(pThis->m_allConnections.end(), imported.begin(), imported.end());
+                            ConnectionManager::SaveConnections(pThis->m_allConnections);
+                            pThis->ReloadConnections();
+                            MessageBox(hwnd, L"Import successful!", L"Success", MB_OK);
+                        }
                     }
                 }
                 break;
-            }
-            case IDM_FILE_EXPORT: {
-                OPENFILENAME ofn; wchar_t szFile[MAX_PATH] = L"connections.json"; ZeroMemory(&ofn, sizeof(ofn)); ofn.lStructSize = sizeof(ofn); ofn.hwndOwner = hwnd; ofn.lpstrFile = szFile; ofn.nMaxFile = sizeof(szFile); ofn.lpstrFilter = L"JSON Files\0*.json\0All Files\0*.*\0"; ofn.nFilterIndex = 1; ofn.Flags = OFN_OVERWRITEPROMPT;
-                if (GetSaveFileName(&ofn)) {
-                    if (ConnectionManager::ExportToJson(ofn.lpstrFile, pThis->m_connections))
-                        MessageBox(hwnd, L"Export successful!", L"Success", MB_OK);
+            case IDM_FILE_EXPORT:
+                {
+                    OPENFILENAME ofn; wchar_t szFile[MAX_PATH] = L"connections.json"; ZeroMemory(&ofn, sizeof(ofn)); ofn.lStructSize = sizeof(ofn); ofn.hwndOwner = hwnd; ofn.lpstrFile = szFile; ofn.nMaxFile = sizeof(szFile); ofn.lpstrFilter = L"JSON Files\0*.json\0All Files\0*.*\0"; ofn.nFilterIndex = 1; ofn.Flags = OFN_OVERWRITEPROMPT;
+                    if (GetSaveFileName(&ofn)) {
+                        if (ConnectionManager::ExportToJson(ofn.lpstrFile, pThis->m_allConnections))
+                            MessageBox(hwnd, L"Export successful!", L"Success", MB_OK);
+                    }
                 }
                 break;
-            }
-            case IDM_CTX_CONNECT: {
-                TVITEM tvi = { 0 }; tvi.hItem = TreeView_GetSelection(pThis->m_hTreeView); tvi.mask = TVIF_PARAM;
-                if (TreeView_GetItem(pThis->m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) pThis->LaunchSession(pThis->m_connections[(size_t)tvi.lParam]);
+
+            case IDM_CTX_CONNECT:
+                {
+                    TVITEM tvi = { 0 }; tvi.hItem = TreeView_GetSelection(pThis->m_hTreeView); tvi.mask = TVIF_PARAM;
+                    if (TreeView_GetItem(pThis->m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) {
+                        size_t idx = (size_t)tvi.lParam;
+                        if (idx < pThis->m_filteredIndices.size()) pThis->LaunchSession(pThis->m_allConnections[pThis->m_filteredIndices[idx]]);
+                    }
+                }
                 break;
-            }
-            case IDM_CTX_WINSCP: {
-                TVITEM tvi = { 0 }; tvi.hItem = TreeView_GetSelection(pThis->m_hTreeView); tvi.mask = TVIF_PARAM;
-                if (TreeView_GetItem(pThis->m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) pThis->LaunchWinSCP(pThis->m_connections[(size_t)tvi.lParam]);
+            case IDM_CTX_WINSCP:
+                {
+                    TVITEM tvi = { 0 }; tvi.hItem = TreeView_GetSelection(pThis->m_hTreeView); tvi.mask = TVIF_PARAM;
+                    if (TreeView_GetItem(pThis->m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) {
+                        size_t idx = (size_t)tvi.lParam;
+                        if (idx < pThis->m_filteredIndices.size()) pThis->LaunchWinSCP(pThis->m_allConnections[pThis->m_filteredIndices[idx]]);
+                    }
+                }
                 break;
-            }
+
             case IDM_CTX_EDIT: pThis->OnEditConnection(); break;
             case IDM_CTX_DELETE: pThis->OnDeleteConnection(); break;
             case IDM_CTX_CLONE: pThis->OnCloneConnection(); break;
@@ -143,18 +185,23 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             case IDM_TOOLS_MULTI_INPUT: pThis->ToggleBroadcast(); break;
             }
             return 0;
+
         case WM_TIMER: pThis->OnTimer(); return 0;
+
         case WM_SETCURSOR:
             if (LOWORD(lParam) == HTCLIENT) {
                 POINT pt; GetCursorPos(&pt); ScreenToClient(hwnd, &pt);
                 if (abs(pt.x - pThis->m_treeWidth) < 5) { SetCursor(LoadCursor(NULL, IDC_SIZEWE)); return TRUE; }
             }
             break;
-        case WM_LBUTTONDOWN: {
-            int x = LOWORD(lParam);
-            if (abs(x - pThis->m_treeWidth) < 5) { pThis->m_isResizing = true; SetCapture(hwnd); }
+
+        case WM_LBUTTONDOWN:
+            {
+                int x = LOWORD(lParam);
+                if (abs(x - pThis->m_treeWidth) < 5) { pThis->m_isResizing = true; SetCapture(hwnd); }
+            }
             return 0;
-        }
+
         case WM_LBUTTONUP:
             if (pThis->m_isResizing) { pThis->m_isResizing = false; ReleaseCapture(); }
             if (pThis->m_hDragItem) {
@@ -166,8 +213,10 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                     TVITEM tviTarget = { 0 }; tviTarget.hItem = hTarget; tviTarget.mask = TVIF_PARAM | TVIF_TEXT;
                     wchar_t buf[256]; tviTarget.pszText = buf; tviTarget.cchTextMax = 256;
                     TreeView_GetItem(pThis->m_hTreeView, &tviTarget);
+                    
                     TVITEM tviSource = { 0 }; tviSource.hItem = pThis->m_hDragItem; tviSource.mask = TVIF_PARAM;
                     TreeView_GetItem(pThis->m_hTreeView, &tviSource);
+                    
                     if (tviSource.lParam != (LPARAM)-1) {
                         std::wstring newGroup = L"";
                         if (tviTarget.lParam == (LPARAM)-1) newGroup = buf;
@@ -181,9 +230,12 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                             }
                         }
                         size_t idx = (size_t)tviSource.lParam;
-                        if (idx < pThis->m_connections.size()) {
-                            pThis->m_connections[idx].group = newGroup;
-                            ConnectionManager::SaveConnections(pThis->m_connections);
+                        if (idx < pThis->m_filteredIndices.size()) {
+                            // Find matching connection in m_allConnections via m_filteredIndices
+                            // Actually, m_filteredIndices[idx] is the index in m_allConnections
+                            size_t realIdx = pThis->m_filteredIndices[idx];
+                            pThis->m_allConnections[realIdx].group = newGroup;
+                            ConnectionManager::SaveConnections(pThis->m_allConnections);
                             pThis->ReloadConnections();
                         }
                     }
@@ -204,6 +256,7 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                 TreeView_SelectDropTarget(pThis->m_hTreeView, hTarget);
             }
             return 0;
+
         case WM_ACTIVATE:
             if (LOWORD(wParam) != WA_INACTIVE) {
                 RegisterHotKey(hwnd, 1, MOD_CONTROL, VK_TAB);
@@ -214,6 +267,7 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                 UnregisterHotKey(hwnd, 1); UnregisterHotKey(hwnd, 2); UnregisterHotKey(hwnd, 3); UnregisterHotKey(hwnd, 4);
             }
             return 0;
+
         case WM_HOTKEY:
             if (wParam == 1) { 
                 int sel = TabCtrl_GetCurSel(pThis->m_hTabControl); int count = TabCtrl_GetItemCount(pThis->m_hTabControl);
@@ -224,20 +278,10 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             } else if (wParam == 3) { pThis->CloseTab(TabCtrl_GetCurSel(pThis->m_hTabControl));
             } else if (wParam == 4) { pThis->OnQuickConnect(); }
             return 0;
+
         case WM_MOUSEACTIVATE: return MA_ACTIVATE;
-        case WM_DESTROY: {
-            WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
-            if (GetWindowPlacement(hwnd, &wp)) {
-                ConnectionManager::WindowState state;
-                state.x = wp.rcNormalPosition.left; state.y = wp.rcNormalPosition.top;
-                state.width = wp.rcNormalPosition.right - wp.rcNormalPosition.left;
-                state.height = wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
-                state.maximized = (wp.showCmd == SW_MAXIMIZE); state.sidebarWidth = pThis->m_treeWidth;
-                ConnectionManager::SaveWindowState(state);
-            }
-            for (Session* s : pThis->m_sessions) { HANDLE hP = OpenProcess(PROCESS_TERMINATE, FALSE, s->pid); if (hP) { TerminateProcess(hP, 0); CloseHandle(hP); } }
-            PostQuitMessage(0); return 0;
-        }
+
+        case WM_DESTROY: pThis->OnDestroy(); return 0;
         }
     }
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
@@ -249,25 +293,30 @@ void MainWindow::OnCreate()
     icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
     icex.dwICC = ICC_TREEVIEW_CLASSES | ICC_TAB_CLASSES | ICC_BAR_CLASSES;
     InitCommonControlsEx(&icex);
+
     m_hSearchEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"",
         WS_VISIBLE | WS_CHILD | ES_AUTOHSCROLL,
         0, 0, 0, 0,
         m_hwnd, (HMENU)IDC_SEARCH_EDIT, GetModuleHandle(NULL), NULL);
     SetWindowSubclass(m_hSearchEdit, EditCtrlSubclassProc, 0, 0);
     SendMessage(m_hSearchEdit, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
     m_hTreeView = CreateWindowEx(0, WC_TREEVIEW, L"Connections",
         WS_VISIBLE | WS_CHILD | WS_BORDER | TVS_HASLINES | TVS_LINESATROOT | TVS_HASBUTTONS | TVS_SHOWSELALWAYS,
         0, 0, 0, 0,
         m_hwnd, (HMENU)IDC_TREEVIEW, GetModuleHandle(NULL), NULL);
+
     m_hTabControl = CreateWindowEx(0, WC_TABCONTROL, L"",
         WS_VISIBLE | WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
         0, 0, 0, 0,
         m_hwnd, (HMENU)IDC_TABCONTROL, GetModuleHandle(NULL), NULL);
     SetWindowSubclass(m_hTabControl, TabCtrlSubclassProc, 0, 0);
+
     m_hStatusBar = CreateWindowEx(0, STATUSCLASSNAME, NULL,
         WS_VISIBLE | WS_CHILD | SBARS_SIZEGRIP,
         0, 0, 0, 0,
         m_hwnd, (HMENU)IDC_STATUSBAR, GetModuleHandle(NULL), NULL);
+
     m_hImageList = ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 2, 1);
     m_hTabImageList = ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 2, 1);
     HICON hF = NULL; HICON hS = NULL;
@@ -276,219 +325,70 @@ void MainWindow::OnCreate()
     if (hS) { ImageList_AddIcon(m_hImageList, hS); ImageList_AddIcon(m_hTabImageList, hS); DestroyIcon(hS); }
     TreeView_SetImageList(m_hTreeView, m_hImageList, TVSIL_NORMAL);
     TabCtrl_SetImageList(m_hTabControl, m_hTabImageList);
+
     m_puttyPath = ConnectionManager::LoadPuttyPath();
     m_winscpPath = ConnectionManager::LoadWinSCPPath();
+    
     ConnectionManager::WindowState state = ConnectionManager::LoadWindowState();
     if (state.sidebarWidth > 50) m_treeWidth = state.sidebarWidth;
     if (state.x != CW_USEDEFAULT) {
         MoveWindow(m_hwnd, state.x, state.y, state.width, state.height, TRUE);
         if (state.maximized) ShowWindow(m_hwnd, SW_MAXIMIZE);
     }
+
     ReloadConnections();
     SetTimer(m_hwnd, 1, 1000, NULL);
 }
 
-void MainWindow::ReloadConnections() { FilterConnections(L" "); }
+void MainWindow::ReloadConnections()
+{
+    m_allConnections = ConnectionManager::LoadConnections();
+    if (m_allConnections.empty()) {
+        Connection ex; ex.name = L"Example Host"; ex.host = L"127.0.0.1"; ex.port = L"22"; ex.user = L"root"; ex.group = L"Default";
+        m_allConnections.push_back(ex); ConnectionManager::SaveConnections(m_allConnections);
+    }
+    // Sort logic
+    std::sort(m_allConnections.begin(), m_allConnections.end(), [](const Connection& a, const Connection& b) {
+        if (a.group != b.group) return a.group < b.group;
+        return a.name < b.name;
+    });
+    
+    // Apply filter
+    wchar_t buf[256] = {0};
+    if (m_hSearchEdit) GetWindowText(m_hSearchEdit, buf, 256);
+    FilterConnections(buf);
+}
 
 void MainWindow::FilterConnections(const std::wstring& query)
 {
     TreeView_DeleteAllItems(m_hTreeView);
-    m_connections = ConnectionManager::LoadConnections();
-    if (m_connections.empty() && query.empty()) {
-        Connection ex; ex.name = L"Example Host"; ex.host = L"127.0.0.1"; ex.port = L"22"; ex.user = L"root"; ex.group = L"Default";
-        m_connections.push_back(ex); ConnectionManager::SaveConnections(m_connections);
-    }
-    std::sort(m_connections.begin(), m_connections.end(), [](const Connection& a, const Connection& b) {
-        if (a.group != b.group) return a.group < b.group;
-        return a.name < b.name;
-    });
+    m_filteredIndices.clear();
+
     std::wstring lq = query; std::transform(lq.begin(), lq.end(), lq.begin(), ::towlower);
     std::map<std::wstring, HTREEITEM> folders;
     TVINSERTSTRUCT tvis = { 0 }; tvis.hInsertAfter = TVI_LAST; tvis.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
-    for (size_t i = 0; i < m_connections.size(); ++i) {
-        std::wstring ln = m_connections[i].name; std::transform(ln.begin(), ln.end(), ln.begin(), ::towlower);
-        std::wstring lh = m_connections[i].host; std::transform(lh.begin(), lh.end(), lh.begin(), ::towlower);
+    
+    for (size_t i = 0; i < m_allConnections.size(); ++i) {
+        std::wstring ln = m_allConnections[i].name; std::transform(ln.begin(), ln.end(), ln.begin(), ::towlower);
+        std::wstring lh = m_allConnections[i].host; std::transform(lh.begin(), lh.end(), lh.begin(), ::towlower);
+        
         if (!lq.empty() && ln.find(lq) == std::wstring::npos && lh.find(lq) == std::wstring::npos) continue;
+        
+        m_filteredIndices.push_back(i);
+        size_t listIdx = m_filteredIndices.size() - 1;
+
         HTREEITEM hP = TVI_ROOT;
-        if (!m_connections[i].group.empty()) {
-            if (folders.find(m_connections[i].group) == folders.end()) {
-                tvis.hParent = TVI_ROOT; tvis.item.pszText = (LPWSTR)m_connections[i].group.c_str(); tvis.item.lParam = (LPARAM)-1; tvis.item.iImage = 0; tvis.item.iSelectedImage = 0;
-                folders[m_connections[i].group] = TreeView_InsertItem(m_hTreeView, &tvis);
+        if (!m_allConnections[i].group.empty()) {
+            if (folders.find(m_allConnections[i].group) == folders.end()) {
+                tvis.hParent = TVI_ROOT; tvis.item.pszText = (LPWSTR)m_allConnections[i].group.c_str(); tvis.item.lParam = (LPARAM)-1; tvis.item.iImage = 0; tvis.item.iSelectedImage = 0;
+                folders[m_allConnections[i].group] = TreeView_InsertItem(m_hTreeView, &tvis);
             }
-            hP = folders[m_connections[i].group];
+            hP = folders[m_allConnections[i].group];
         }
-        tvis.hParent = hP; tvis.item.pszText = (LPWSTR)m_connections[i].name.c_str(); tvis.item.lParam = (LPARAM)i; tvis.item.iImage = 1; tvis.item.iSelectedImage = 1;
+        tvis.hParent = hP; tvis.item.pszText = (LPWSTR)m_allConnections[i].name.c_str(); tvis.item.lParam = (LPARAM)listIdx; tvis.item.iImage = 1; tvis.item.iSelectedImage = 1;
         TreeView_InsertItem(m_hTreeView, &tvis);
+        
         if (hP != TVI_ROOT) TreeView_Expand(m_hTreeView, hP, TVE_EXPAND);
-    }
-}
-
-INT_PTR CALLBACK MainWindow::ConnectionDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    static Connection* pConn = NULL;
-    switch (message) {
-    case WM_INITDIALOG:
-        pConn = (Connection*)lParam;
-        SetDlgItemText(hDlg, IDC_EDIT_NAME, pConn->name.c_str()); SetDlgItemText(hDlg, IDC_EDIT_GROUP, pConn->group.c_str()); SetDlgItemText(hDlg, IDC_EDIT_HOST, pConn->host.c_str()); SetDlgItemText(hDlg, IDC_EDIT_PORT, pConn->port.c_str()); SetDlgItemText(hDlg, IDC_EDIT_USER, pConn->user.c_str()); SetDlgItemText(hDlg, IDC_EDIT_PASSWORD, pConn->password.c_str()); SetDlgItemText(hDlg, IDC_EDIT_ARGS, pConn->args.c_str());
-        SubclassEdit(hDlg, IDC_EDIT_NAME); SubclassEdit(hDlg, IDC_EDIT_GROUP); SubclassEdit(hDlg, IDC_EDIT_HOST); SubclassEdit(hDlg, IDC_EDIT_PORT); SubclassEdit(hDlg, IDC_EDIT_USER); SubclassEdit(hDlg, IDC_EDIT_PASSWORD); SubclassEdit(hDlg, IDC_EDIT_ARGS);
-        return (INT_PTR)TRUE;
-    case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK) {
-            wchar_t buf[256];
-            GetDlgItemText(hDlg, IDC_EDIT_NAME, buf, 256); pConn->name = buf; GetDlgItemText(hDlg, IDC_EDIT_GROUP, buf, 256); pConn->group = buf; GetDlgItemText(hDlg, IDC_EDIT_HOST, buf, 256); pConn->host = buf; GetDlgItemText(hDlg, IDC_EDIT_PORT, buf, 256); pConn->port = buf; GetDlgItemText(hDlg, IDC_EDIT_USER, buf, 256); pConn->user = buf; GetDlgItemText(hDlg, IDC_EDIT_PASSWORD, buf, 256); pConn->password = buf; GetDlgItemText(hDlg, IDC_EDIT_ARGS, buf, 256); pConn->args = buf;
-            EndDialog(hDlg, IDOK); return (INT_PTR)TRUE;
-        } else if (LOWORD(wParam) == IDCANCEL) { EndDialog(hDlg, IDCANCEL); return (INT_PTR)TRUE; }
-        break;
-    }
-    return (INT_PTR)FALSE;
-}
-
-INT_PTR CALLBACK MainWindow::SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    static SettingsData* pData = NULL;
-    switch (message) {
-    case WM_INITDIALOG:
-        pData = (SettingsData*)lParam;
-        SetDlgItemText(hDlg, IDC_EDIT_PUTTY_PATH, pData->puttyPath.c_str()); SetDlgItemText(hDlg, IDC_EDIT_WINSCP_PATH, pData->winscpPath.c_str());
-        SubclassEdit(hDlg, IDC_EDIT_PUTTY_PATH); SubclassEdit(hDlg, IDC_EDIT_WINSCP_PATH);
-        return (INT_PTR)TRUE;
-    case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK) {
-            wchar_t buf[MAX_PATH];
-            GetDlgItemText(hDlg, IDC_EDIT_PUTTY_PATH, buf, MAX_PATH); pData->puttyPath = buf; GetDlgItemText(hDlg, IDC_EDIT_WINSCP_PATH, buf, MAX_PATH); pData->winscpPath = buf;
-            EndDialog(hDlg, IDOK); return (INT_PTR)TRUE;
-        } else if (LOWORD(wParam) == IDCANCEL) { EndDialog(hDlg, IDCANCEL); return (INT_PTR)TRUE; }
-        else if (LOWORD(wParam) == IDC_BUTTON_BROWSE || LOWORD(wParam) == IDC_BUTTON_BROWSE_WINSCP) {
-            OPENFILENAME ofn; wchar_t szF[MAX_PATH] = { 0 }; ZeroMemory(&ofn, sizeof(ofn)); ofn.lStructSize = sizeof(ofn); ofn.hwndOwner = hDlg; ofn.lpstrFile = szF; ofn.nMaxFile = sizeof(szF); ofn.lpstrFilter = L"Executable Files\0*.exe\0All Files\0*.*\0"; ofn.nFilterIndex = 1; ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-            if (GetOpenFileName(&ofn)) SetDlgItemText(hDlg, (LOWORD(wParam) == IDC_BUTTON_BROWSE) ? IDC_EDIT_PUTTY_PATH : IDC_EDIT_WINSCP_PATH, ofn.lpstrFile);
-        }
-        break;
-    }
-    return (INT_PTR)FALSE;
-}
-
-INT_PTR CALLBACK MainWindow::QuickConnectDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    static Connection* pC = NULL;
-    switch (message) {
-    case WM_INITDIALOG:
-        pC = (Connection*)lParam;
-        SetDlgItemText(hDlg, IDC_EDIT_HOST, pC->host.c_str()); SetDlgItemText(hDlg, IDC_EDIT_PORT, pC->port.c_str()); SetDlgItemText(hDlg, IDC_EDIT_USER, pC->user.c_str()); SetDlgItemText(hDlg, IDC_EDIT_PASSWORD, pC->password.c_str());
-        SubclassEdit(hDlg, IDC_EDIT_HOST); SubclassEdit(hDlg, IDC_EDIT_PORT); SubclassEdit(hDlg, IDC_EDIT_USER); SubclassEdit(hDlg, IDC_EDIT_PASSWORD);
-        return (INT_PTR)TRUE;
-    case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK) {
-            wchar_t buf[256];
-            GetDlgItemText(hDlg, IDC_EDIT_HOST, buf, 256); pC->host = buf; GetDlgItemText(hDlg, IDC_EDIT_PORT, buf, 256); pC->port = buf; GetDlgItemText(hDlg, IDC_EDIT_USER, buf, 256); pC->user = buf; GetDlgItemText(hDlg, IDC_EDIT_PASSWORD, buf, 256); pC->password = buf;
-            pC->name = L"Quick: " + pC->host; EndDialog(hDlg, IDOK); return (INT_PTR)TRUE;
-        } else if (LOWORD(wParam) == IDCANCEL) { EndDialog(hDlg, IDCANCEL); return (INT_PTR)TRUE; }
-        break;
-    }
-    return (INT_PTR)FALSE;
-}
-
-void MainWindow::OnNewConnection()
-{
-    Connection n; n.port = L"22"; n.user = L"root";
-    if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_CONNECTION), m_hwnd, ConnectionDialogProc, (LPARAM)&n) == IDOK) {
-        if (n.name.empty()) n.name = L"Unnamed";
-        m_connections.push_back(n); ConnectionManager::SaveConnections(m_connections); ReloadConnections();
-    }
-}
-
-void MainWindow::OnEditConnection()
-{
-    TVITEM tvi = { 0 }; tvi.hItem = TreeView_GetSelection(m_hTreeView); tvi.mask = TVIF_PARAM;
-    if (TreeView_GetItem(m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) {
-        if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_CONNECTION), m_hwnd, ConnectionDialogProc, (LPARAM)&m_connections[(size_t)tvi.lParam]) == IDOK) {
-            ConnectionManager::SaveConnections(m_connections); ReloadConnections();
-        }
-    }
-}
-
-void MainWindow::OnDeleteConnection()
-{
-    TVITEM tvi = { 0 }; tvi.hItem = TreeView_GetSelection(m_hTreeView); tvi.mask = TVIF_PARAM;
-    if (TreeView_GetItem(m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) {
-        if (MessageBox(m_hwnd, L"Are you sure you want to delete this connection?", L"Confirm Delete", MB_YESNO | MB_ICONQUESTION) == IDYES) {
-            m_connections.erase(m_connections.begin() + (size_t)tvi.lParam); ConnectionManager::SaveConnections(m_connections); ReloadConnections();
-        }
-    }
-}
-
-void MainWindow::OnCloneConnection()
-{
-    TVITEM tvi = { 0 }; tvi.hItem = TreeView_GetSelection(m_hTreeView); tvi.mask = TVIF_PARAM;
-    if (TreeView_GetItem(m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) {
-        Connection cl = m_connections[(size_t)tvi.lParam]; cl.name += L" (Copy)";
-        if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_CONNECTION), m_hwnd, ConnectionDialogProc, (LPARAM)&cl) == IDOK) {
-            m_connections.push_back(cl); ConnectionManager::SaveConnections(m_connections); ReloadConnections();
-        }
-    }
-}
-
-void MainWindow::OnDuplicateSession()
-{
-    int sel = TabCtrl_GetCurSel(m_hTabControl);
-    if (sel != -1) {
-        TCITEM tie; tie.mask = TCIF_PARAM;
-        if (TabCtrl_GetItem(m_hTabControl, sel, &tie)) { LaunchSession(((Session*)tie.lParam)->conn); }
-    }
-}
-
-void MainWindow::OnQuickConnect()
-{
-    Connection t; t.port = L"22"; t.user = L"root";
-    if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_QUICK_CONNECT), m_hwnd, QuickConnectDialogProc, (LPARAM)&t) == IDOK) LaunchSession(t);
-}
-
-void MainWindow::OnSettings()
-{
-    SettingsData d = { m_puttyPath, m_winscpPath };
-    if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SETTINGS), m_hwnd, SettingsDialogProc, (LPARAM)&d) == IDOK) {
-        m_puttyPath = d.puttyPath; m_winscpPath = d.winscpPath;
-        ConnectionManager::SavePuttyPath(m_puttyPath); ConnectionManager::SaveWinSCPPath(m_winscpPath);
-    }
-}
-
-bool MainWindow::IsSourceOfFocus() {
-    HWND hF = GetForegroundWindow();
-    if (hF != m_hwnd && !IsChild(m_hwnd, hF)) return false;
-    for (Session* s : m_sessions) {
-        DWORD tid = GetWindowThreadProcessId(s->hEmbedded, NULL);
-        GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
-        if (GetGUIThreadInfo(tid, &gti) && gti.hwndFocus) return true;
-    }
-    return false;
-}
-
-void MainWindow::BroadcastKey(UINT msg, WPARAM wp, LPARAM lp) {
-    Session* pS = NULL;
-    for (Session* s : m_sessions) {
-        DWORD tid = GetWindowThreadProcessId(s->hEmbedded, NULL);
-        GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
-        if (GetGUIThreadInfo(tid, &gti) && gti.hwndFocus) { pS = s; break; }
-    }
-    if (!pS) return;
-    for (Session* s : m_sessions) {
-        if (s != pS) {
-            HWND hT = GetWindow(s->hEmbedded, GW_CHILD); if (!hT) hT = s->hEmbedded;
-            PostMessage(hT, msg, wp, lp);
-        }
-    }
-}
-
-void MainWindow::ToggleBroadcast()
-{
-    m_broadcastMode = !m_broadcastMode;
-    HMENU hM = GetMenu(m_hwnd); HMENU hT = GetSubMenu(hM, 2);
-    CheckMenuItem(hT, IDM_TOOLS_MULTI_INPUT, m_broadcastMode ? MF_CHECKED : MF_UNCHECKED);
-    if (m_broadcastMode) {
-        if (!g_hKeyboardHook) g_hKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardHookProc, GetModuleHandle(NULL), 0);
-        SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)L"*** BROADCAST MODE ACTIVE ***");
-    } else {
-        if (g_hKeyboardHook) { UnhookWindowsHookEx(g_hKeyboardHook); g_hKeyboardHook = NULL; }
-        SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)L"Broadcast Disabled");
     }
 }
 
@@ -498,7 +398,10 @@ LRESULT MainWindow::OnNotify(LPARAM lParam)
     if (pH->hwndFrom == m_hTreeView) {
         if (pH->code == NM_DBLCLK) {
             TVITEM tvi = { 0 }; tvi.hItem = TreeView_GetSelection(m_hTreeView); tvi.mask = TVIF_PARAM;
-            if (TreeView_GetItem(m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) LaunchSession(m_connections[(size_t)tvi.lParam]);
+            if (TreeView_GetItem(m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) {
+                size_t idx = (size_t)tvi.lParam;
+                if (idx < m_filteredIndices.size()) LaunchSession(m_allConnections[m_filteredIndices[idx]]);
+            }
         } else if (pH->code == NM_RCLICK) {
             POINT pt; GetCursorPos(&pt); TVHITTESTINFO ht = { 0 }; ht.pt = pt; ScreenToClient(m_hTreeView, &ht.pt);
             HTREEITEM hI = TreeView_HitTest(m_hTreeView, &ht);
@@ -526,48 +429,6 @@ LRESULT MainWindow::OnNotify(LPARAM lParam)
     return 0;
 }
 
-void MainWindow::LaunchSession(const Connection& c)
-{
-    std::wstring cmd = m_puttyPath; if (cmd.find(L" ") != std::wstring::npos && cmd.front() != L'"') cmd = L"\"" + cmd + L"\"";
-    cmd += L" -ssh"; if (!c.password.empty()) cmd += L" -pw \"" + c.password + L"\"";
-    if (!c.port.empty()) cmd += L" -P " + c.port;
-    if (!c.args.empty()) cmd += L" " + c.args;
-    cmd += L" "; if (!c.user.empty()) cmd += c.user + L"@";
-    cmd += c.host;
-    DWORD pid = ProcessUtils::LaunchProcess(cmd);
-    if (pid == 0) { MessageBox(m_hwnd, (L"Failed to launch: " + cmd).c_str(), L"Error", MB_ICONERROR); return; }
-    HWND hP = ProcessUtils::WaitForWindow(pid);
-    if (hP) {
-        ProcessUtils::EmbedWindow(hP, m_hTabControl);
-        Session* s = new Session{ hP, pid, c.name, c }; m_sessions.push_back(s);
-        TCITEM tie; tie.mask = TCIF_TEXT | TCIF_PARAM | TCIF_IMAGE; tie.pszText = (LPWSTR)s->name.c_str(); tie.lParam = (LPARAM)s; tie.iImage = 0;
-        int idx = TabCtrl_InsertItem(m_hTabControl, TabCtrl_GetItemCount(m_hTabControl), &tie);
-        TabCtrl_SetCurSel(m_hTabControl, idx); OnTabChange();
-    }
-}
-
-void MainWindow::LaunchWinSCP(const Connection& c)
-{
-    std::wstring cmd = m_winscpPath; if (cmd.find(L" ") != std::wstring::npos && cmd.front() != L'"') cmd = L"\"" + cmd + L"\"";
-    cmd += L" sftp://"; if (!c.user.empty()) cmd += c.user + L"@";
-    cmd += c.host; if (!c.port.empty()) cmd += L":" + c.port;
-    cmd += L"/"; if (!c.password.empty()) cmd += L" /password=\"" + c.password + L"\"";
-    if (ProcessUtils::LaunchProcess(cmd) == 0) MessageBox(m_hwnd, (L"Failed to launch: " + cmd).c_str(), L"Error", MB_ICONERROR);
-}
-
-void MainWindow::OnTabChange()
-{
-    int sel = TabCtrl_GetCurSel(m_hTabControl); int count = TabCtrl_GetItemCount(m_hTabControl);
-    for (int i = 0; i < count; ++i) {
-        TCITEM tie; tie.mask = TCIF_PARAM;
-        if (TabCtrl_GetItem(m_hTabControl, i, &tie)) {
-            Session* s = (Session*)tie.lParam;
-            if (i == sel) { ShowWindow(s->hEmbedded, SW_SHOW); ResizeSession(s); SetFocus(s->hEmbedded); SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)(L"Connected to " + s->name).c_str()); } 
-            else ShowWindow(s->hEmbedded, SW_HIDE);
-        }
-    }
-}
-
 void MainWindow::OnTimer()
 {
     std::vector<int> toClose; int count = TabCtrl_GetItemCount(m_hTabControl);
@@ -583,27 +444,19 @@ void MainWindow::OnTimer()
     for (int i = (int)toClose.size() - 1; i >= 0; --i) CloseTab(toClose[i]);
 }
 
-void MainWindow::CloseTab(int idx)
+void MainWindow::OnDestroy()
 {
-    if (idx < 0 || idx >= TabCtrl_GetItemCount(m_hTabControl)) return;
-    TCITEM tie; tie.mask = TCIF_PARAM;
-    if (TabCtrl_GetItem(m_hTabControl, idx, &tie)) {
-        Session* s = (Session*)tie.lParam;
-        HANDLE hP = OpenProcess(PROCESS_TERMINATE, FALSE, s->pid); if (hP) { TerminateProcess(hP, 0); CloseHandle(hP); }
-        for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it) { if (*it == s) { delete s; m_sessions.erase(it); break; } }
-        TabCtrl_DeleteItem(m_hTabControl, idx); 
-        int count = TabCtrl_GetItemCount(m_hTabControl);
-        if (count > 0) TabCtrl_SetCurSel(m_hTabControl, (idx >= count) ? count - 1 : idx);
-        OnTabChange();
+    WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+    if (GetWindowPlacement(m_hwnd, &wp)) {
+        ConnectionManager::WindowState state;
+        state.x = wp.rcNormalPosition.left; state.y = wp.rcNormalPosition.top;
+        state.width = wp.rcNormalPosition.right - wp.rcNormalPosition.left;
+        state.height = wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
+        state.maximized = (wp.showCmd == SW_MAXIMIZE); state.sidebarWidth = m_treeWidth;
+        ConnectionManager::SaveWindowState(state);
     }
-}
-
-void MainWindow::ResizeSession(Session* s)
-{
-    if (IsWindow(s->hEmbedded)) {
-        RECT rc; GetClientRect(m_hTabControl, &rc); TabCtrl_AdjustRect(m_hTabControl, FALSE, &rc);
-        MoveWindow(s->hEmbedded, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
-    }
+    for (Session* s : m_sessions) { HANDLE hP = OpenProcess(PROCESS_TERMINATE, FALSE, s->pid); if (hP) { TerminateProcess(hP, 0); CloseHandle(hP); } }
+    PostQuitMessage(0);
 }
 
 void MainWindow::OnSize(int width, int height)

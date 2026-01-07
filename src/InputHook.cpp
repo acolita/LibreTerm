@@ -4,11 +4,9 @@
 
 // Global hook handle
 HHOOK g_hKeyboardHook = NULL;
-HWND g_hMainWindow = NULL;
 
-// External reference to sessions from MainWindow (we need a way to access them)
-// For MVP, we'll store a pointer to MainWindow instance
-MainWindow* g_pMainWindow = NULL;
+// External reference to sessions from MainWindow
+extern MainWindow* g_pMainWindow;
 
 LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam)
 {

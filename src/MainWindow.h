@@ -53,8 +53,13 @@ private:
     HIMAGELIST m_hImageList;
     HIMAGELIST m_hTabImageList;
 
+    // Session management
     std::vector<Session*> m_sessions;
-    std::vector<Connection> m_connections;
+    std::vector<size_t> m_filteredIndices;
+    std::vector<Connection> m_allConnections;
+
+    // Layout
+
 
     int m_treeWidth;
     bool m_isResizing;
