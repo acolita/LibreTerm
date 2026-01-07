@@ -1,6 +1,8 @@
 #include "ConnectionManager.h"
 #include <shlobj.h>
 #include <sstream>
+#include <fstream>
+#include <regex>
 
 #pragma comment(lib, "shell32.lib")
 
@@ -77,6 +79,56 @@ void ConnectionManager::SaveConnections(const std::vector<Connection>& conns) {
     }
 }
 
+bool ConnectionManager::ExportToJson(const std::wstring& filePath, const std::vector<Connection>& conns) {
+    std::wofstream file(filePath);
+    if (!file.is_open()) return false;
+    file << L"[\n";
+    for (size_t i = 0; i < conns.size(); ++i) {
+        file << L"  {\n";
+        file << L"    \"name\": \"" << conns[i].name << L"\",\n";
+        file << L"    \"group\": \"" << conns[i].group << L"\",\n";
+        file << L"    \"host\": \"" << conns[i].host << L"\",\n";
+        file << L"    \"port\": \"" << conns[i].port << L"\",\n";
+        file << L"    \"user\": \"" << conns[i].user << L"\",\n";
+        file << L"    \"password\": \"" << conns[i].password << L"\",\n";
+        file << L"    \"args\": \"" << conns[i].args << L"\"\n";
+        file << L"  }" << (i == conns.size() - 1 ? L"" : L",") << L"\n";
+    }
+    file << L"]\n";
+    return true;
+}
+
+std::vector<Connection> ConnectionManager::ImportFromJson(const std::wstring& filePath) {
+    std::vector<Connection> conns;
+    std::wifstream file(filePath);
+    if (!file.is_open()) return conns;
+    std::wstringstream buffer; buffer << file.rdbuf();
+    std::wstring content = buffer.str();
+    std::wregex obj_re(LR"(\{([^\}]*)\})");
+    std::wregex field_re(LR"(\"([^\"]+)\"\s*:\s*\"([^\"]*)\")");
+    auto objs_begin = std::wsregex_iterator(content.begin(), content.end(), obj_re);
+    auto objs_end = std::wsregex_iterator();
+    for (auto i = objs_begin; i != objs_end; ++i) {
+        std::wstring obj_content = (*i)[1].str();
+        Connection c;
+        auto fields_begin = std::wsregex_iterator(obj_content.begin(), obj_content.end(), field_re);
+        auto fields_end = std::wsregex_iterator();
+        for (auto j = fields_begin; j != fields_end; ++j) {
+            std::wstring key = (*j)[1].str();
+            std::wstring val = (*j)[2].str();
+            if (key == L"name") c.name = val;
+            else if (key == L"group") c.group = val;
+            else if (key == L"host") c.host = val;
+            else if (key == L"port") c.port = val;
+            else if (key == L"user") c.user = val;
+            else if (key == L"password") c.password = val;
+            else if (key == L"args") c.args = val;
+        }
+        if (!c.name.empty()) conns.push_back(c);
+    }
+    return conns;
+}
+
 std::wstring ConnectionManager::LoadPuttyPath() {
     wchar_t buf[MAX_PATH];
     std::wstring path = GetConfigPath();
@@ -85,11 +137,8 @@ std::wstring ConnectionManager::LoadPuttyPath() {
 }
 
 void ConnectionManager::SavePuttyPath(const std::wstring& puttyPath) {
-
     std::wstring path = GetConfigPath();
-
     WritePrivateProfileString(L"Settings", L"PuttyPath", puttyPath.c_str(), path.c_str());
-
 }
 
 
@@ -121,9 +170,6 @@ void ConnectionManager::SaveWinSCPPath(const std::wstring& winscpPath) {
 
 
 }
-
-
-
 
 
 
@@ -176,12 +222,9 @@ ConnectionManager::WindowState ConnectionManager::LoadWindowState() {
 
 
 
+
+
 }
-
-
-
-
-
 
 
 void ConnectionManager::SaveWindowState(const WindowState& state) {
@@ -217,7 +260,3 @@ void ConnectionManager::SaveWindowState(const WindowState& state) {
 
 
 }
-
-
-
-

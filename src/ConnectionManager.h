@@ -19,6 +19,9 @@ public:
     static std::vector<Connection> LoadConnections();
     static void SaveConnections(const std::vector<Connection>& conns);
 
+    static bool ExportToJson(const std::wstring& filePath, const std::vector<Connection>& conns);
+    static std::vector<Connection> ImportFromJson(const std::wstring& filePath);
+
     static std::wstring LoadPuttyPath();
     static void SavePuttyPath(const std::wstring& path);
 

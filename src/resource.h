@@ -5,16 +5,15 @@
 #define IDM_HELP_ABOUT      102
 #define IDM_FILE_NEW        103
 #define IDM_FILE_SETTINGS   104
-
-// Main Window Controls
-#define IDC_TREEVIEW        1001
-#define IDC_TABCONTROL      1002
-#define IDC_STATUSBAR       1003
-#define IDC_SEARCH_EDIT     1004
+#define IDM_FILE_QUICK_CONNECT 105
+#define IDM_FILE_IMPORT     106
+#define IDM_FILE_EXPORT     107
 
 // Dialogs
 #define IDD_CONNECTION      200
 #define IDD_SETTINGS        210
+#define IDD_QUICK_CONNECT   220
+
 
 // Dialog Controls
 #define IDC_EDIT_NAME       201
@@ -24,7 +23,12 @@
 #define IDC_EDIT_PASSWORD   207
 #define IDC_EDIT_ARGS       205
 #define IDC_EDIT_GROUP      206
-#define IDC_EDIT_SEARCH     208
+#define IDC_SEARCH_EDIT     1004
+
+// Main Window Controls
+#define IDC_TREEVIEW        1001
+#define IDC_TABCONTROL      1002
+#define IDC_STATUSBAR       1003
 
 #define IDC_EDIT_PUTTY_PATH 211
 #define IDC_BUTTON_BROWSE   212

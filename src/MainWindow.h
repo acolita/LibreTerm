@@ -13,7 +13,7 @@ struct Session {
     HWND hEmbedded;
     DWORD pid;
     std::wstring name;
-    Connection conn; // Store connection info for duplication
+    Connection conn;
 };
 
 class MainWindow
@@ -29,15 +29,16 @@ public:
 
     void Show(int nCmdShow);
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-    static INT_PTR CALLBACK ConnectionDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
     
+    static INT_PTR CALLBACK ConnectionDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+    static INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+    static INT_PTR CALLBACK QuickConnectDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
     struct SettingsData {
         std::wstring puttyPath;
         std::wstring winscpPath;
     };
-    static INT_PTR CALLBACK SettingsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-    // Broadcast Helpers - Public for Hook
     bool IsBroadcastActive() const { return m_broadcastMode; }
     bool IsSourceOfFocus();
     void BroadcastKey(UINT msg, WPARAM wParam, LPARAM lParam);
@@ -52,14 +53,13 @@ private:
     HIMAGELIST m_hImageList;
     HIMAGELIST m_hTabImageList;
 
-    // Session management
     std::vector<Session*> m_sessions;
     std::vector<Connection> m_connections;
 
-    // Layout
     int m_treeWidth;
     bool m_isResizing;
     bool m_broadcastMode;
+    HTREEITEM m_hDragItem;
     std::wstring m_puttyPath;
     std::wstring m_winscpPath;
 
@@ -71,27 +71,24 @@ private:
     void OnTimer();
     void CloseTab(int index);
 
-    // Helper to register class
     static void RegisterWindowClass();
 
     void LaunchSession(const Connection& conn);
     void LaunchWinSCP(const Connection& conn);
     void ResizeSession(Session* session);
     
-    // Connection Management
     void ReloadConnections();
     void OnNewConnection();
     void OnEditConnection();
     void OnDeleteConnection();
     void OnCloneConnection();
     void OnDuplicateSession();
-                void OnSettings();
-                void FilterConnections(const std::wstring& query);
-                void ToggleBroadcast();
-            };
-            
-            // Helpers in Subclass.cpp
-    LRESULT CALLBACK EditCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
-    LRESULT CALLBACK TabCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
-    void SubclassEdit(HWND hDlg, int nIDDlgItem);
-    
+    void OnQuickConnect();
+    void OnSettings();
+    void FilterConnections(const std::wstring& query);
+    void ToggleBroadcast();
+};
+
+LRESULT CALLBACK EditCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+LRESULT CALLBACK TabCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+void SubclassEdit(HWND hDlg, int nIDDlgItem);
