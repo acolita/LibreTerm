@@ -39,6 +39,7 @@ public:
     struct SettingsData {
         std::wstring puttyPath;
         std::wstring winscpPath;
+        std::wstring plinkPath;
     };
 
     bool IsBroadcastActive() const { return m_broadcastMode; }
@@ -92,6 +93,7 @@ private:
     HTREEITEM m_hDragItem;
     std::wstring m_puttyPath;
     std::wstring m_winscpPath;
+    std::wstring m_plinkPath;
 
     // Fullscreen state
     DWORD m_oldStyle;

@@ -50,6 +50,8 @@ std::vector<Connection> ConnectionManager::LoadConnections() {
                 GetPrivateProfileString(section.c_str(), L"Args", L"", buf, 256, path.c_str()); c.args = buf;
 
                 GetPrivateProfileString(section.c_str(), L"Group", L"", buf, 256, path.c_str()); c.group = buf;
+                
+                GetPrivateProfileString(section.c_str(), L"JumpHost", L"", buf, 256, path.c_str()); c.jumpHostConnectionName = buf;
 
                 conns.push_back(c);
 
@@ -90,6 +92,8 @@ std::vector<Connection> ConnectionManager::LoadConnections() {
                 WritePrivateProfileString(section.c_str(), L"Args", conns[i].args.c_str(), path.c_str());
 
                 WritePrivateProfileString(section.c_str(), L"Group", conns[i].group.c_str(), path.c_str());
+                
+                WritePrivateProfileString(section.c_str(), L"JumpHost", conns[i].jumpHostConnectionName.c_str(), path.c_str());
 
             }
 
@@ -109,7 +113,8 @@ bool ConnectionManager::ExportToJson(const std::wstring& filePath, const std::ve
         file << L"    \"port\": \"" << conns[i].port << L"\",\n";
         file << L"    \"user\": \"" << conns[i].user << L"\",\n";
         file << L"    \"password\": \"" << conns[i].password << L"\",\n";
-        file << L"    \"args\": \"" << conns[i].args << L"\"\n";
+        file << L"    \"args\": \"" << conns[i].args << L"\",\n";
+        file << L"    \"jumpHost\": \"" << conns[i].jumpHostConnectionName << L"\"\n";
         file << L"  }" << (i == conns.size() - 1 ? L"" : L",") << L"\n";
     }
     file << L"]\n";
@@ -141,6 +146,7 @@ std::vector<Connection> ConnectionManager::ImportFromJson(const std::wstring& fi
             else if (key == L"user") c.user = val;
             else if (key == L"password") c.password = val;
             else if (key == L"args") c.args = val;
+            else if (key == L"jumpHost") c.jumpHostConnectionName = val;
         }
         if (!c.name.empty()) conns.push_back(c);
     }
@@ -157,6 +163,18 @@ std::wstring ConnectionManager::LoadPuttyPath() {
 void ConnectionManager::SavePuttyPath(const std::wstring& puttyPath) {
     std::wstring path = GetConfigPath();
     WritePrivateProfileString(L"Settings", L"PuttyPath", puttyPath.c_str(), path.c_str());
+}
+
+std::wstring ConnectionManager::LoadPlinkPath() {
+    wchar_t buf[MAX_PATH];
+    std::wstring path = GetConfigPath();
+    GetPrivateProfileString(L"Settings", L"PlinkPath", L"plink.exe", buf, MAX_PATH, path.c_str());
+    return buf;
+}
+
+void ConnectionManager::SavePlinkPath(const std::wstring& pathStr) {
+    std::wstring path = GetConfigPath();
+    WritePrivateProfileString(L"Settings", L"PlinkPath", pathStr.c_str(), path.c_str());
 }
 
 

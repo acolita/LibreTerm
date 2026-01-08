@@ -12,6 +12,7 @@ struct Connection {
     std::wstring credentialAlias;
     std::wstring args;
     std::wstring group;
+    std::wstring jumpHostConnectionName;
 };
 
 class ConnectionManager {
@@ -25,6 +26,9 @@ public:
 
     static std::wstring LoadPuttyPath();
     static void SavePuttyPath(const std::wstring& path);
+
+    static std::wstring LoadPlinkPath();
+    static void SavePlinkPath(const std::wstring& path);
 
     static std::wstring LoadWinSCPPath();
     static void SaveWinSCPPath(const std::wstring& path);

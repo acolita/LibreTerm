@@ -373,6 +373,7 @@ void MainWindow::OnCreate()
 
     m_puttyPath = ConnectionManager::LoadPuttyPath();
     m_winscpPath = ConnectionManager::LoadWinSCPPath();
+    m_plinkPath = ConnectionManager::LoadPlinkPath();
     
     ConnectionManager::WindowState state = ConnectionManager::LoadWindowState();
     if (state.sidebarWidth > 50) m_treeWidth = state.sidebarWidth;

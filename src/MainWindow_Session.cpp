@@ -26,6 +26,65 @@ void MainWindow::LaunchSession(const Connection& conn)
     if (!conn.port.empty()) cmd += L" -P " + conn.port;
     if (!conn.args.empty()) cmd += L" " + conn.args;
     
+    // Jump Server Logic
+    if (!conn.jumpHostConnectionName.empty()) {
+        // Find Jump Host Connection
+        Connection jumpConn;
+        bool found = false;
+        // Need access to m_allConnections or load them.
+        // Better to reload to be safe or use what we have in memory if available. 
+        // MainWindow has m_allConnections.
+        for (const auto& c : m_allConnections) {
+            if (c.name == conn.jumpHostConnectionName) {
+                jumpConn = c;
+                found = true;
+                break;
+            }
+        }
+        
+        if (found) {
+            // Resolve Jump Credential
+            std::wstring jUser = jumpConn.user;
+            std::wstring jPass = jumpConn.password;
+            if (!jumpConn.credentialAlias.empty()) {
+                Credential c = CredentialManager::GetCredential(jumpConn.credentialAlias);
+                if (!c.alias.empty()) {
+                    jUser = c.username;
+                    jPass = c.password;
+                }
+            }
+            
+            // Construct Plink Command
+            // plink.exe -ssh -l user -pw pass host -nc target_host:target_port
+            std::wstring plinkCmd = m_plinkPath;
+            if (plinkCmd.empty()) plinkCmd = L"plink.exe";
+            
+            if (plinkCmd.find(L" ") != std::wstring::npos && plinkCmd.front() != L'"') {
+                plinkCmd = L"\"" + plinkCmd + L"\"";
+            }
+            
+            plinkCmd += L" -ssh";
+            if (!jUser.empty()) plinkCmd += L" -l " + jUser;
+            if (!jPass.empty()) plinkCmd += L" -pw \"" + jPass + L"\"";
+            if (!jumpConn.port.empty()) plinkCmd += L" -P " + jumpConn.port;
+            
+            plinkCmd += L" " + jumpConn.host;
+            
+            // Netcat mode to target
+            // We need target host and port. 
+            // PuTTY's -proxycmd replaces %host and %port but using -nc directly with Plink is cleaner if we know them.
+            // Actually, PuTTY docs say -proxycmd command uses %host and %port placeholders.
+            // Let's use placeholders so Plink connects to the *target* specified by PuTTY.
+            // Wait, plink -nc dest:port creates a tunnel.
+            // The command should be: plink [jump_opts] jump_host -nc %host:%port
+            
+            plinkCmd += L" -nc %host:%port";
+            
+            // Add -proxycmd to PuTTY command
+            cmd += L" -proxycmd \"" + plinkCmd + L"\"";
+        }
+    }
+    
     // Host last
     cmd += L" ";
     if (!user.empty()) cmd += user + L"@";

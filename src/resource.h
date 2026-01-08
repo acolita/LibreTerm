@@ -74,6 +74,11 @@
 
 // Connection Dialog Update
 #define IDC_COMBO_CREDENTIAL 209
+#define IDC_COMBO_JUMP_SERVER 208
+
+// Settings Dialog Update
+#define IDC_EDIT_PLINK_PATH  215
+#define IDC_BUTTON_BROWSE_PLINK 216
 
 
 // Context Menu

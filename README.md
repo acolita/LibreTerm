@@ -4,6 +4,8 @@
 
 ## Key Features
 
+> **Note**: LibreTerm is dedicated exclusively to **SSH** and **SCP/SFTP** protocols. We do not support VNC, RDP, HTTP, or other remote access protocols.
+
 - **Native Performance**: Written in pure C++ using the Win32 API. No heavy frameworks, no Electron. Just raw speed and minimal memory footprint.
 - **Window Embedding**: Seamlessly embeds PuTTY windows directly into tabs for a unified workspace.
 - **Secure Credential Storage (v1.3.0)**: Migrated to Windows Credential Manager for secure, encrypted password storage.

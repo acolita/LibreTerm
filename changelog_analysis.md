@@ -31,7 +31,6 @@ Based on the analysis of WinSSHTerm's history (v1.0 - v2.41), here are critical 
 *   [ ] Keyboard Shortcuts (AltGr + Space for last tab).
 
 #### Phase 2: Advanced Integration (Matches v2.x)
-*   [ ] **Launch Tools:** Architecture to support external tools (RDP, VNC, HTTP) not just SSH.
 *   [ ] **Jump Servers:** Tunneling support (Multi-hop).
 *   [ ] **File Transfer:** WinSCP integration ("Copy Files").
 *   [ ] **X11:** VcXsrv integration.
