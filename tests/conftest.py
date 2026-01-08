@@ -184,3 +184,24 @@ def clean_credentials():
         cred_file = os.path.join(appdata, 'LibreTerm', 'credentials.ini')
         if os.path.exists(cred_file):
             os.remove(cred_file)
+
+
+@pytest.fixture(scope='session', autouse=True)
+def fake_ssh_server():
+    """Starts a fake SSH server for testing."""
+    import subprocess
+    import time
+    
+    server_script = os.path.abspath("tests/fake_ssh_server.py")
+    process = subprocess.Popen(["python", server_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    
+    # Give it a moment to start
+    time.sleep(1)
+    
+    yield process
+    
+    process.terminate()
+    try:
+        process.wait(timeout=2)
+    except:
+        process.kill()

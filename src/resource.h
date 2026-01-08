@@ -9,6 +9,7 @@
 #define IDM_FILE_IMPORT     106
 #define IDM_FILE_EXPORT     107
 #define IDM_TOOLS_CREDENTIALS 108
+#define IDM_TOOLS_SNIPPETS    109
 
 // Dialogs
 #define IDD_CONNECTION      200
@@ -17,9 +18,29 @@
 #define IDD_CREDENTIAL_MANAGER 230
 #define IDD_CREDENTIAL_EDIT    240
 #define IDD_RENAME_TAB         250
+#define IDD_SNIPPET_MANAGER    260
+#define IDD_SNIPPET_EDIT       270
 
 // Dialog Controls
 #define IDC_EDIT_NAME       201
+// ... (previous controls)
+
+// Snippet Manager Controls
+#define IDC_LIST_SNIPPETS    261
+#define IDC_BTN_SNIP_ADD     262
+#define IDC_BTN_SNIP_EDIT    263
+#define IDC_BTN_SNIP_DELETE  264
+#define IDC_BTN_SNIP_SEND    265
+#define IDC_BTN_SNIP_SEND_ALL 266
+
+// Snippet Edit Controls
+#define IDC_EDIT_SNIP_NAME   271
+#define IDC_EDIT_SNIP_CONTENT 272
+
+// Quick Command Bar Controls
+#define IDC_QUICK_CMD_EDIT   1005
+#define IDC_QUICK_CMD_BTN    1006
+#define IDC_QUICK_CMD_CHK    1007
 #define IDC_EDIT_HOST       202
 #define IDC_EDIT_PORT       203
 #define IDC_EDIT_USER       204

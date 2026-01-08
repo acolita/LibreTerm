@@ -8,6 +8,9 @@
 - **Window Embedding**: Seamlessly embeds PuTTY windows directly into tabs for a unified workspace.
 - **Credential Manager (v1.0.0)**: Create reusable authentication profiles (Alias -> User/Pass/Key). Share one credential across multiple connections.
 - **Advanced Tab Management (v1.1.0)**: Rename tabs on the fly, close tabs to the right, or close all other tabs.
+- **Snippet Manager (v1.2.0)**: Store and send reusable command snippets to active or all sessions.
+- **Quick Command Bar (v1.2.0)**: Type and send commands instantly without leaving the main window.
+- **Automated Host Key Acceptance (v1.2.0)**: PuTTY and WinSCP now automatically handle unknown SSH host key warnings.
 - **View Modes (v1.1.0)**: 
     - **Fullscreen (`F11`)**: Immerse in a borderless terminal experience.
     - **Focus Mode (`Ctrl+B`)**: Toggle the sidebar to maximize terminal width.

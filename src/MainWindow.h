@@ -54,6 +54,14 @@ public:
     void UpdateStatusBar();
     static INT_PTR CALLBACK RenameTabDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
+    // v1.2.0 Features
+    static INT_PTR CALLBACK SnippetManagerDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+    static INT_PTR CALLBACK SnippetEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+    void SendTextToSession(Session* s, const std::wstring& text);
+    void SendSnippet(const std::wstring& text, bool toAll);
+    void OnQuickSend();
+    void OnSnippetManager();
+
 private:
     HWND m_hwnd;
     HWND m_hTreeView;
@@ -61,6 +69,11 @@ private:
     HWND m_hTabControl;
     HWND m_hStatusBar;
     HMENU m_hMenu;
+
+    // Quick Command Bar
+    HWND m_hQuickEdit;
+    HWND m_hQuickBtn;
+    HWND m_hQuickChk;
 
     HIMAGELIST m_hImageList;
     HIMAGELIST m_hTabImageList;

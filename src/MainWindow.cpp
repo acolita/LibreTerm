@@ -13,7 +13,7 @@ LRESULT CALLBACK EditCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 LRESULT CALLBACK TabCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 void SubclassEdit(HWND hDlg, int nIDDlgItem);
 
-MainWindow::MainWindow() : m_hwnd(NULL), m_hTreeView(NULL), m_hSearchEdit(NULL), m_hTabControl(NULL), m_hStatusBar(NULL), m_treeWidth(250), m_isResizing(false), m_hImageList(NULL), m_hTabImageList(NULL), m_broadcastMode(false), m_hDragItem(NULL), m_isFullscreen(false), m_showSidebar(true), m_oldStyle(0), m_oldExStyle(0)
+MainWindow::MainWindow() : m_hwnd(NULL), m_hTreeView(NULL), m_hSearchEdit(NULL), m_hTabControl(NULL), m_hStatusBar(NULL), m_treeWidth(250), m_isResizing(false), m_hImageList(NULL), m_hTabImageList(NULL), m_broadcastMode(false), m_hDragItem(NULL), m_isFullscreen(false), m_showSidebar(true), m_oldStyle(0), m_oldExStyle(0), m_hQuickEdit(NULL), m_hQuickBtn(NULL), m_hQuickChk(NULL)
 {
     m_oldRect = { 0 };
     g_pMainWindow = this;
@@ -72,6 +72,7 @@ BOOL MainWindow::Create(PCWSTR lpWindowName, DWORD dwStyle, DWORD dwExStyle,
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hToolsMenu, L"&Tools");
     AppendMenu(hToolsMenu, MF_STRING, IDM_TOOLS_MULTI_INPUT, L"&Multi-Input (Broadcast Mode)");
     AppendMenu(hToolsMenu, MF_STRING, IDM_TOOLS_CREDENTIALS, L"&Credential Manager");
+    AppendMenu(hToolsMenu, MF_STRING, IDM_TOOLS_SNIPPETS, L"&Snippet Manager");
 
     HMENU hHelpMenu = CreateMenu();
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hHelpMenu, L"&Help");
@@ -198,6 +199,8 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             case IDM_VIEW_FULLSCREEN: pThis->ToggleFullscreen(); break;
             case IDM_TOOLS_MULTI_INPUT: pThis->ToggleBroadcast(); break;
             case IDM_TOOLS_CREDENTIALS: pThis->OnCredentialManager(); break;
+            case IDM_TOOLS_SNIPPETS: pThis->OnSnippetManager(); break;
+            case IDC_QUICK_CMD_BTN: pThis->OnQuickSend(); break;
             }
             return 0;
 
@@ -280,9 +283,10 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                 RegisterHotKey(hwnd, 4, MOD_CONTROL, 'Q');
                 RegisterHotKey(hwnd, 5, 0, VK_F11);
                 RegisterHotKey(hwnd, 6, MOD_CONTROL, 'B');
+                RegisterHotKey(hwnd, 7, 0, VK_F2);
             } else {
                 UnregisterHotKey(hwnd, 1); UnregisterHotKey(hwnd, 2); UnregisterHotKey(hwnd, 3); UnregisterHotKey(hwnd, 4);
-                UnregisterHotKey(hwnd, 5); UnregisterHotKey(hwnd, 6);
+                UnregisterHotKey(hwnd, 5); UnregisterHotKey(hwnd, 6); UnregisterHotKey(hwnd, 7);
             }
             return 0;
 
@@ -296,7 +300,8 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             } else if (wParam == 3) { pThis->CloseTab(TabCtrl_GetCurSel(pThis->m_hTabControl));
             } else if (wParam == 4) { pThis->OnQuickConnect(); 
             } else if (wParam == 5) { pThis->ToggleFullscreen(); 
-            } else if (wParam == 6) { pThis->ToggleSidebar(); }
+            } else if (wParam == 6) { pThis->ToggleSidebar(); 
+            } else if (wParam == 7) { pThis->OnRenameTab(); }
             return 0;
 
         case WM_MOUSEACTIVATE: return MA_ACTIVATE;
@@ -336,6 +341,26 @@ void MainWindow::OnCreate()
         WS_VISIBLE | WS_CHILD | SBARS_SIZEGRIP,
         0, 0, 0, 0,
         m_hwnd, (HMENU)IDC_STATUSBAR, GetModuleHandle(NULL), NULL);
+
+    // Quick Command Bar
+    m_hQuickEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"",
+        WS_VISIBLE | WS_CHILD | ES_AUTOHSCROLL,
+        0, 0, 0, 0,
+        m_hwnd, (HMENU)IDC_QUICK_CMD_EDIT, GetModuleHandle(NULL), NULL);
+    SendMessage(m_hQuickEdit, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
+    m_hQuickBtn = CreateWindowEx(0, L"BUTTON", L"Send",
+        WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+        0, 0, 0, 0,
+        m_hwnd, (HMENU)IDC_QUICK_CMD_BTN, GetModuleHandle(NULL), NULL);
+    SendMessage(m_hQuickBtn, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
+    m_hQuickChk = CreateWindowEx(0, L"BUTTON", L"Enter",
+        WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
+        0, 0, 0, 0,
+        m_hwnd, (HMENU)IDC_QUICK_CMD_CHK, GetModuleHandle(NULL), NULL);
+    SendMessage(m_hQuickChk, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+    SendMessage(m_hQuickChk, BM_SETCHECK, BST_CHECKED, 0);
 
     m_hImageList = ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 2, 1);
     m_hTabImageList = ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 2, 1);
@@ -434,6 +459,12 @@ LRESULT MainWindow::OnNotify(LPARAM lParam)
         } else if (pH->code == TVN_BEGINDRAGW) {
             LPNMTREEVIEW lp = (LPNMTREEVIEW)lParam;
             if (lp->itemNew.lParam != (LPARAM)-1) { m_hDragItem = lp->itemNew.hItem; TreeView_SelectItem(m_hTreeView, m_hDragItem); SetCapture(m_hwnd); }
+        } else if (pH->code == NM_RETURN) {
+            TVITEM tvi = { 0 }; tvi.hItem = TreeView_GetSelection(m_hTreeView); tvi.mask = TVIF_PARAM;
+            if (TreeView_GetItem(m_hTreeView, &tvi) && tvi.lParam != (LPARAM)-1) {
+                size_t idx = (size_t)tvi.lParam;
+                if (idx < m_filteredIndices.size()) LaunchSession(m_allConnections[m_filteredIndices[idx]]);
+            }
         }
     } else if (pH->hwndFrom == m_hTabControl) {
         if (pH->code == TCN_SELCHANGE) OnTabChange();
@@ -486,6 +517,7 @@ void MainWindow::OnSize(int width, int height)
         RECT rcS; GetWindowRect(m_hStatusBar, &rcS);
         int h = height - (rcS.bottom - rcS.top);
         int sh = 22;
+        int qh = 24; // Quick bar height
         int currentTreeWidth = m_showSidebar ? m_treeWidth : 0;
 
         if (m_showSidebar) {
@@ -493,7 +525,19 @@ void MainWindow::OnSize(int width, int height)
             MoveWindow(m_hTreeView, 0, sh, currentTreeWidth, h - sh, TRUE);
         }
         
-        MoveWindow(m_hTabControl, currentTreeWidth + (m_showSidebar ? 2 : 0), 0, width - currentTreeWidth - (m_showSidebar ? 2 : 0), h, TRUE);
+        // Quick Bar Layout
+        int tabX = currentTreeWidth + (m_showSidebar ? 2 : 0);
+        int tabW = width - tabX;
+        
+        int btnW = 50;
+        int chkW = 50;
+        int editW = tabW - btnW - chkW - 10;
+        
+        MoveWindow(m_hQuickEdit, tabX, 0, editW, qh, TRUE);
+        MoveWindow(m_hQuickBtn, tabX + editW + 2, 0, btnW, qh, TRUE);
+        MoveWindow(m_hQuickChk, tabX + editW + btnW + 6, 0, chkW, qh, TRUE);
+
+        MoveWindow(m_hTabControl, tabX, qh + 2, tabW, h - qh - 2, TRUE);
         OnTabChange();
     }
 }

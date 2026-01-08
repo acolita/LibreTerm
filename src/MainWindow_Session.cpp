@@ -40,23 +40,39 @@ void MainWindow::LaunchSession(const Connection& conn)
     HWND hPutty = ProcessUtils::WaitForWindow(pid);
     if (hPutty)
     {
-        ProcessUtils::EmbedWindow(hPutty, m_hTabControl);
-        
-        // Store connection info for duplication
-        Session* s = new Session{ hPutty, pid, conn.name, conn };
-        m_sessions.push_back(s);
-        
-        TCITEM tie; tie.mask = TCIF_TEXT | TCIF_PARAM | TCIF_IMAGE; 
-        tie.pszText = (LPWSTR)s->name.c_str(); 
-        tie.lParam = (LPARAM)s; 
-        tie.iImage = 0; // Terminal icon
-        
-        int idx = TabCtrl_InsertItem(m_hTabControl, TabCtrl_GetItemCount(m_hTabControl), &tie);
-        TabCtrl_SetCurSel(m_hTabControl, idx);
-        OnTabChange();
-        
-        // Ensure focus
-        SetFocus(hPutty);
+        // 1. Check for Security Alert
+        // PuTTY might show a "PuTTY Security Alert" dialog before the main window is ready
+        // or shortly after. WaitForWindow already found a visible window, but it might be the alert.
+        wchar_t title[256];
+        GetWindowText(hPutty, title, 256);
+        if (wcscmp(title, L"PuTTY Security Alert") == 0) {
+            // It's the alert! Send 'y' to accept.
+            // Using PostMessage to send 'y' (0x59)
+            PostMessage(hPutty, WM_CHAR, 'y', 0);
+            
+            // Now wait for the ACTUAL terminal window
+            hPutty = ProcessUtils::WaitForWindow(pid, 5000); 
+        }
+
+        if (hPutty) {
+            ProcessUtils::EmbedWindow(hPutty, m_hTabControl);
+            
+            // Store connection info for duplication
+            Session* s = new Session{ hPutty, pid, conn.name, conn };
+            m_sessions.push_back(s);
+            
+            TCITEM tie; tie.mask = TCIF_TEXT | TCIF_PARAM | TCIF_IMAGE; 
+            tie.pszText = (LPWSTR)s->name.c_str(); 
+            tie.lParam = (LPARAM)s; 
+            tie.iImage = 0; // Terminal icon
+            
+            int idx = TabCtrl_InsertItem(m_hTabControl, TabCtrl_GetItemCount(m_hTabControl), &tie);
+            TabCtrl_SetCurSel(m_hTabControl, idx);
+            OnTabChange();
+            
+            // Ensure focus
+            SetFocus(hPutty);
+        }
     }
 }
 
@@ -85,6 +101,9 @@ void MainWindow::LaunchWinSCP(const Connection& conn)
     if (!conn.port.empty()) cmd += L":" + conn.port;
     cmd += L"/";
     
+    // Accept all host keys
+    cmd += L" -hostkey=\"*\"";
+
     if (!password.empty()) {
         cmd += L" /password=\"" + password + L"\"";
     }

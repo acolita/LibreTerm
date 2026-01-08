@@ -2,6 +2,8 @@
 #include "ProcessUtils.h"
 #include <commdlg.h>
 
+extern MainWindow* g_pMainWindow;
+
 void MainWindow::OnNewConnection()
 {
     Connection n; n.port = L"22"; n.user = L"root";
@@ -254,4 +256,151 @@ INT_PTR CALLBACK MainWindow::RenameTabDialogProc(HWND hDlg, UINT message, WPARAM
     }
     return (INT_PTR)FALSE;
 }
+
+void MainWindow::SendTextToSession(Session* s, const std::wstring& text) {
+    if (!s || !IsWindow(s->hEmbedded)) return;
+    HWND hTarget = GetWindow(s->hEmbedded, GW_CHILD); // Usually PuTTY's inner window
+    if (!hTarget) hTarget = s->hEmbedded;
+
+    for (wchar_t c : text) {
+        PostMessage(hTarget, WM_CHAR, (WPARAM)c, 0);
+    }
+}
+
+void MainWindow::OnQuickSend() {
+    wchar_t buf[1024];
+    GetWindowText(m_hQuickEdit, buf, 1024);
+    std::wstring cmd = buf;
+    if (cmd.empty()) return;
+
+    if (SendMessage(m_hQuickChk, BM_GETCHECK, 0, 0) == BST_CHECKED) {
+        cmd += L"\r";
+    }
+
+    if (m_broadcastMode) {
+        for (Session* s : m_sessions) {
+            SendTextToSession(s, cmd);
+        }
+    } else {
+        int sel = TabCtrl_GetCurSel(m_hTabControl);
+        if (sel != -1) {
+            TCITEM tie; tie.mask = TCIF_PARAM;
+            if (TabCtrl_GetItem(m_hTabControl, sel, &tie)) {
+                Session* s = (Session*)tie.lParam;
+                SendTextToSession(s, cmd);
+            }
+        }
+    }
+    SetWindowText(m_hQuickEdit, L"");
+    SetFocus(m_hQuickEdit);
+}
+
+void MainWindow::OnSnippetManager() {
+    DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SNIPPET_MANAGER), m_hwnd, SnippetManagerDialogProc);
+}
+
+// Snippet Manager Logic
+#include "SnippetManager.h"
+
+INT_PTR CALLBACK MainWindow::SnippetManagerDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+    static std::vector<Snippet> snippets;
+    static HWND hList;
+
+    switch (message) {
+    case WM_INITDIALOG:
+        hList = GetDlgItem(hDlg, IDC_LIST_SNIPPETS);
+        snippets = SnippetManager::LoadSnippets();
+        for (const auto& s : snippets) {
+            SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)s.name.c_str());
+        }
+        return (INT_PTR)TRUE;
+
+    case WM_COMMAND:
+        switch (LOWORD(wParam)) {
+        case IDC_BTN_SNIP_ADD: {
+            Snippet s;
+            if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SNIPPET_EDIT), hDlg, SnippetEditDialogProc, (LPARAM)&s) == IDOK) {
+                snippets.push_back(s);
+                SnippetManager::SaveSnippets(snippets);
+                SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)s.name.c_str());
+            }
+        } break;
+        
+        case IDC_BTN_SNIP_EDIT: {
+            int sel = (int)SendMessage(hList, LB_GETCURSEL, 0, 0);
+            if (sel != LB_ERR) {
+                if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SNIPPET_EDIT), hDlg, SnippetEditDialogProc, (LPARAM)&snippets[sel]) == IDOK) {
+                    SnippetManager::SaveSnippets(snippets);
+                    SendMessage(hList, LB_DELETESTRING, sel, 0);
+                    SendMessage(hList, LB_INSERTSTRING, sel, (LPARAM)snippets[sel].name.c_str());
+                }
+            }
+        } break;
+
+        case IDC_BTN_SNIP_DELETE: {
+            int sel = (int)SendMessage(hList, LB_GETCURSEL, 0, 0);
+            if (sel != LB_ERR) {
+                if (MessageBox(hDlg, L"Delete this snippet?", L"Confirm", MB_YESNO) == IDYES) {
+                    snippets.erase(snippets.begin() + sel);
+                    SnippetManager::SaveSnippets(snippets);
+                    SendMessage(hList, LB_DELETESTRING, sel, 0);
+                }
+            }
+        } break;
+
+        case IDC_BTN_SNIP_SEND:
+        case IDC_BTN_SNIP_SEND_ALL: {
+            int sel = (int)SendMessage(hList, LB_GETCURSEL, 0, 0);
+            if (sel != LB_ERR && g_pMainWindow) {
+                std::wstring text = snippets[sel].content;
+                std::wstring sent = L"";
+                for (wchar_t c : text) {
+                    if (c == L'\n') sent += L'\r';
+                    else sent += c;
+                }
+                g_pMainWindow->SendSnippet(sent, (LOWORD(wParam) == IDC_BTN_SNIP_SEND_ALL));
+            }
+        } break;
+
+        case IDCANCEL: EndDialog(hDlg, IDCANCEL); return (INT_PTR)TRUE;
+        }
+    }
+    return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK MainWindow::SnippetEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+    static Snippet* pSnip = NULL;
+    switch (message) {
+    case WM_INITDIALOG:
+        pSnip = (Snippet*)lParam;
+        SetDlgItemText(hDlg, IDC_EDIT_SNIP_NAME, pSnip->name.c_str());
+        SetDlgItemText(hDlg, IDC_EDIT_SNIP_CONTENT, pSnip->content.c_str());
+        return (INT_PTR)TRUE;
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            wchar_t buf[4096];
+            GetDlgItemText(hDlg, IDC_EDIT_SNIP_NAME, buf, 4096); pSnip->name = buf;
+            GetDlgItemText(hDlg, IDC_EDIT_SNIP_CONTENT, buf, 4096); pSnip->content = buf;
+            EndDialog(hDlg, IDOK); return (INT_PTR)TRUE;
+        }
+        if (LOWORD(wParam) == IDCANCEL) { EndDialog(hDlg, IDCANCEL); return (INT_PTR)TRUE; }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+
+void MainWindow::SendSnippet(const std::wstring& text, bool toAll) {
+    if (toAll) {
+        for (Session* s : m_sessions) SendTextToSession(s, text);
+    } else {
+        int sel = TabCtrl_GetCurSel(m_hTabControl);
+        if (sel != -1) {
+            TCITEM tie; tie.mask = TCIF_PARAM;
+            if (TabCtrl_GetItem(m_hTabControl, sel, &tie)) {
+                SendTextToSession((Session*)tie.lParam, text);
+            }
+        }
+    }
+}
+
 
