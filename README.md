@@ -6,17 +6,16 @@
 
 - **Native Performance**: Written in pure C++ using the Win32 API. No heavy frameworks, no Electron. Just raw speed and minimal memory footprint.
 - **Window Embedding**: Seamlessly embeds PuTTY windows directly into tabs for a unified workspace.
-- **Credential Manager (v1.0.0)**: Create reusable authentication profiles (Alias -> User/Pass/Key). Share one credential across multiple connections.
-- **Advanced Tab Management (v1.1.0)**: Rename tabs on the fly, close tabs to the right, or close all other tabs.
+- **Secure Credential Storage (v1.3.0)**: Migrated to Windows Credential Manager for secure, encrypted password storage.
 - **Snippet Manager (v1.2.0)**: Store and send reusable command snippets to active or all sessions.
 - **Quick Command Bar (v1.2.0)**: Type and send commands instantly without leaving the main window.
 - **Automated Host Key Acceptance (v1.2.0)**: PuTTY and WinSCP now automatically handle unknown SSH host key warnings.
+- **Advanced Tab Management (v1.1.0)**: Rename tabs on the fly, close tabs to the right, or close all other tabs.
 - **View Modes (v1.1.0)**: 
     - **Fullscreen (`F11`)**: Immerse in a borderless terminal experience.
     - **Focus Mode (`Ctrl+B`)**: Toggle the sidebar to maximize terminal width.
-- **Organization**: Group connections into folders with a real-time searchable sidebar.
-- **WinSCP Integration**: One-click file transfer for any active connection.
 - **Productivity Shortcuts**:
+  - `Delete`: Remove selected connection (v1.3.0).
   - `Ctrl + Tab` / `Ctrl + Shift + Tab`: Switch between terminal sessions.
   - `Ctrl + W`: Close the active session.
   - `Ctrl + Q`: Quick Connect without saving to list.

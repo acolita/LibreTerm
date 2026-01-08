@@ -465,6 +465,11 @@ LRESULT MainWindow::OnNotify(LPARAM lParam)
                 size_t idx = (size_t)tvi.lParam;
                 if (idx < m_filteredIndices.size()) LaunchSession(m_allConnections[m_filteredIndices[idx]]);
             }
+        } else if (pH->code == TVN_KEYDOWN) {
+            LPNMTVKEYDOWN pTVK = (LPNMTVKEYDOWN)lParam;
+            if (pTVK->wVKey == VK_DELETE) {
+                OnDeleteConnection();
+            }
         }
     } else if (pH->hwndFrom == m_hTabControl) {
         if (pH->code == TCN_SELCHANGE) OnTabChange();

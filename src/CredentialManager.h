@@ -12,8 +12,8 @@ struct Credential {
 
 class CredentialManager {
 public:
-    static std::wstring GetConfigPath();
     static std::vector<Credential> LoadCredentials();
-    static void SaveCredentials(const std::vector<Credential>& creds);
+    static void SaveCredential(const Credential& cred);
+    static void DeleteCredential(const std::wstring& alias);
     static Credential GetCredential(const std::wstring& alias);
 };

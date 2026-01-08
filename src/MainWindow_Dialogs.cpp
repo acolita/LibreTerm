@@ -115,7 +115,7 @@ INT_PTR CALLBACK MainWindow::CredentialManagerDialogProc(HWND hDlg, UINT message
                 Credential c;
                 if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_CREDENTIAL_EDIT), hDlg, CredentialEditDialogProc, (LPARAM)&c) == IDOK) {
                     creds.push_back(c);
-                    CredentialManager::SaveCredentials(creds);
+                    CredentialManager::SaveCredential(c);
                     int idx = (int)SendDlgItemMessage(hDlg, IDC_LIST_CREDENTIALS, LB_ADDSTRING, 0, (LPARAM)c.alias.c_str());
                     SendDlgItemMessage(hDlg, IDC_LIST_CREDENTIALS, LB_SETCURSEL, idx, 0);
                 }
@@ -130,9 +130,8 @@ INT_PTR CALLBACK MainWindow::CredentialManagerDialogProc(HWND hDlg, UINT message
                     for (auto& c : creds) {
                         if (c.alias == buf) {
                             if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_CREDENTIAL_EDIT), hDlg, CredentialEditDialogProc, (LPARAM)&c) == IDOK) {
-                                CredentialManager::SaveCredentials(creds);
-                                // Update list text just in case alias changed
-                                // For MVP, simple remove and add
+                                CredentialManager::SaveCredential(c);
+                                // Update list text just in case alias changed (though alias edit should probably be disabled if we rely on it as key)
                                 SendDlgItemMessage(hDlg, IDC_LIST_CREDENTIALS, LB_DELETESTRING, sel, 0);
                                 int newIdx = (int)SendDlgItemMessage(hDlg, IDC_LIST_CREDENTIALS, LB_ADDSTRING, 0, (LPARAM)c.alias.c_str());
                                 SendDlgItemMessage(hDlg, IDC_LIST_CREDENTIALS, LB_SETCURSEL, newIdx, 0);
@@ -151,8 +150,8 @@ INT_PTR CALLBACK MainWindow::CredentialManagerDialogProc(HWND hDlg, UINT message
                     SendDlgItemMessage(hDlg, IDC_LIST_CREDENTIALS, LB_GETTEXT, sel, (LPARAM)buf);
                     for (auto it = creds.begin(); it != creds.end(); ++it) {
                         if (it->alias == buf) {
+                            CredentialManager::DeleteCredential(it->alias);
                             creds.erase(it);
-                            CredentialManager::SaveCredentials(creds);
                             SendDlgItemMessage(hDlg, IDC_LIST_CREDENTIALS, LB_DELETESTRING, sel, 0);
                             break;
                         }
