@@ -13,8 +13,9 @@ LRESULT CALLBACK EditCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 LRESULT CALLBACK TabCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 void SubclassEdit(HWND hDlg, int nIDDlgItem);
 
-MainWindow::MainWindow() : m_hwnd(NULL), m_hTreeView(NULL), m_hSearchEdit(NULL), m_hTabControl(NULL), m_hStatusBar(NULL), m_treeWidth(250), m_isResizing(false), m_hImageList(NULL), m_hTabImageList(NULL), m_broadcastMode(false), m_hDragItem(NULL)
+MainWindow::MainWindow() : m_hwnd(NULL), m_hTreeView(NULL), m_hSearchEdit(NULL), m_hTabControl(NULL), m_hStatusBar(NULL), m_treeWidth(250), m_isResizing(false), m_hImageList(NULL), m_hTabImageList(NULL), m_broadcastMode(false), m_hDragItem(NULL), m_isFullscreen(false), m_showSidebar(true), m_oldStyle(0), m_oldExStyle(0)
 {
+    m_oldRect = { 0 };
     g_pMainWindow = this;
 }
 
@@ -62,6 +63,11 @@ BOOL MainWindow::Create(PCWSTR lpWindowName, DWORD dwStyle, DWORD dwExStyle,
     AppendMenu(hFileMenu, MF_STRING, IDM_FILE_EXIT, L"E&xit");
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hFileMenu, L"&File");
 
+    HMENU hViewMenu = CreateMenu();
+    AppendMenu(hViewMenu, MF_STRING, IDM_VIEW_SIDEBAR, L"Show &Sidebar\tCtrl+B");
+    AppendMenu(hViewMenu, MF_STRING, IDM_VIEW_FULLSCREEN, L"&Fullscreen\tF11");
+    AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hViewMenu, L"&View");
+
     HMENU hToolsMenu = CreateMenu();
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hToolsMenu, L"&Tools");
     AppendMenu(hToolsMenu, MF_STRING, IDM_TOOLS_MULTI_INPUT, L"&Multi-Input (Broadcast Mode)");
@@ -71,8 +77,10 @@ BOOL MainWindow::Create(PCWSTR lpWindowName, DWORD dwStyle, DWORD dwExStyle,
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hHelpMenu, L"&Help");
     AppendMenu(hHelpMenu, MF_STRING, IDM_HELP_ABOUT, L"&About");
 
+    m_hMenu = hMenuBar;
+
     m_hwnd = CreateWindowEx(dwExStyle, L"LIBRETERM_MainWindow", lpWindowName, dwStyle,
-        x, y, nWidth, nHeight, hWndParent, hMenuBar, GetModuleHandle(NULL), this);
+        x, y, nWidth, nHeight, hWndParent, m_hMenu, GetModuleHandle(NULL), this);
 
     return (m_hwnd ? TRUE : FALSE);
 }
@@ -183,6 +191,11 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             case IDM_TAB_CLOSE: pThis->CloseTab(TabCtrl_GetCurSel(pThis->m_hTabControl)); break;
             case IDM_TAB_CLOSE_ALL: while (TabCtrl_GetItemCount(pThis->m_hTabControl) > 0) pThis->CloseTab(0); break;
             case IDM_TAB_DUPLICATE: pThis->OnDuplicateSession(); break;
+            case IDM_TAB_RENAME: pThis->OnRenameTab(); break;
+            case IDM_TAB_CLOSE_OTHERS: pThis->CloseOthers(TabCtrl_GetCurSel(pThis->m_hTabControl)); break;
+            case IDM_TAB_CLOSE_RIGHT: pThis->CloseToRight(TabCtrl_GetCurSel(pThis->m_hTabControl)); break;
+            case IDM_VIEW_SIDEBAR: pThis->ToggleSidebar(); break;
+            case IDM_VIEW_FULLSCREEN: pThis->ToggleFullscreen(); break;
             case IDM_TOOLS_MULTI_INPUT: pThis->ToggleBroadcast(); break;
             case IDM_TOOLS_CREDENTIALS: pThis->OnCredentialManager(); break;
             }
@@ -265,8 +278,11 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                 RegisterHotKey(hwnd, 2, MOD_CONTROL | MOD_SHIFT, VK_TAB);
                 RegisterHotKey(hwnd, 3, MOD_CONTROL, 'W');
                 RegisterHotKey(hwnd, 4, MOD_CONTROL, 'Q');
+                RegisterHotKey(hwnd, 5, 0, VK_F11);
+                RegisterHotKey(hwnd, 6, MOD_CONTROL, 'B');
             } else {
                 UnregisterHotKey(hwnd, 1); UnregisterHotKey(hwnd, 2); UnregisterHotKey(hwnd, 3); UnregisterHotKey(hwnd, 4);
+                UnregisterHotKey(hwnd, 5); UnregisterHotKey(hwnd, 6);
             }
             return 0;
 
@@ -278,7 +294,9 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                 int sel = TabCtrl_GetCurSel(pThis->m_hTabControl); int count = TabCtrl_GetItemCount(pThis->m_hTabControl);
                 if (count > 0) { TabCtrl_SetCurSel(pThis->m_hTabControl, (sel - 1 + count) % count); pThis->OnTabChange(); }
             } else if (wParam == 3) { pThis->CloseTab(TabCtrl_GetCurSel(pThis->m_hTabControl));
-            } else if (wParam == 4) { pThis->OnQuickConnect(); }
+            } else if (wParam == 4) { pThis->OnQuickConnect(); 
+            } else if (wParam == 5) { pThis->ToggleFullscreen(); 
+            } else if (wParam == 6) { pThis->ToggleSidebar(); }
             return 0;
 
         case WM_MOUSEACTIVATE: return MA_ACTIVATE;
@@ -468,9 +486,14 @@ void MainWindow::OnSize(int width, int height)
         RECT rcS; GetWindowRect(m_hStatusBar, &rcS);
         int h = height - (rcS.bottom - rcS.top);
         int sh = 22;
-        MoveWindow(m_hSearchEdit, 0, 0, m_treeWidth, sh, TRUE);
-        MoveWindow(m_hTreeView, 0, sh, m_treeWidth, h - sh, TRUE);
-        MoveWindow(m_hTabControl, m_treeWidth + 2, 0, width - m_treeWidth - 2, h, TRUE);
+        int currentTreeWidth = m_showSidebar ? m_treeWidth : 0;
+
+        if (m_showSidebar) {
+            MoveWindow(m_hSearchEdit, 0, 0, currentTreeWidth, sh, TRUE);
+            MoveWindow(m_hTreeView, 0, sh, currentTreeWidth, h - sh, TRUE);
+        }
+        
+        MoveWindow(m_hTabControl, currentTreeWidth + (m_showSidebar ? 2 : 0), 0, width - currentTreeWidth - (m_showSidebar ? 2 : 0), h, TRUE);
         OnTabChange();
     }
 }

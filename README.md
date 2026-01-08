@@ -7,6 +7,10 @@
 - **Native Performance**: Written in pure C++ using the Win32 API. No heavy frameworks, no Electron. Just raw speed and minimal memory footprint.
 - **Window Embedding**: Seamlessly embeds PuTTY windows directly into tabs for a unified workspace.
 - **Credential Manager (v1.0.0)**: Create reusable authentication profiles (Alias -> User/Pass/Key). Share one credential across multiple connections.
+- **Advanced Tab Management (v1.1.0)**: Rename tabs on the fly, close tabs to the right, or close all other tabs.
+- **View Modes (v1.1.0)**: 
+    - **Fullscreen (`F11`)**: Immerse in a borderless terminal experience.
+    - **Focus Mode (`Ctrl+B`)**: Toggle the sidebar to maximize terminal width.
 - **Organization**: Group connections into folders with a real-time searchable sidebar.
 - **WinSCP Integration**: One-click file transfer for any active connection.
 - **Productivity Shortcuts**:

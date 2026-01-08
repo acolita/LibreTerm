@@ -9,4 +9,6 @@ build/
 *.vcxproj
 *.user
 .vs/
+.pytest_cache/
+__pycache__/
 connections.ini

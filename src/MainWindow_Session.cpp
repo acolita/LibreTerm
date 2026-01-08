@@ -105,7 +105,7 @@ void MainWindow::OnTabChange()
                 ShowWindow(s->hEmbedded, SW_SHOW);
                 ResizeSession(s);
                 SetFocus(s->hEmbedded);
-                SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)(L"Connected to " + s->name).c_str());
+                UpdateStatusBar();
             } else {
                 ShowWindow(s->hEmbedded, SW_HIDE);
             }
@@ -145,13 +145,17 @@ void MainWindow::CloseTab(int index)
 void MainWindow::ResizeSession(Session* session)
 {
     if (IsWindow(session->hEmbedded)) {
-        RECT rcTab;
-        GetClientRect(m_hTabControl, &rcTab);
-        TabCtrl_AdjustRect(m_hTabControl, FALSE, &rcTab);
+        HWND hParent = GetParent(session->hEmbedded);
+        RECT rc;
+        GetClientRect(hParent, &rc);
+        
+        if (hParent == m_hTabControl) {
+            TabCtrl_AdjustRect(m_hTabControl, FALSE, &rc);
+        }
         
         MoveWindow(session->hEmbedded, 
-            rcTab.left, rcTab.top, 
-            rcTab.right - rcTab.left, rcTab.bottom - rcTab.top, 
+            rc.left, rc.top, 
+            rc.right - rc.left, rc.bottom - rc.top, 
             TRUE);
     }
 }

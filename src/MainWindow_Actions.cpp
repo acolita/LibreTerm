@@ -118,3 +118,140 @@ void MainWindow::ToggleBroadcast()
         SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)L"Broadcast Disabled");
     }
 }
+
+void MainWindow::ToggleFullscreen()
+{
+    m_isFullscreen = !m_isFullscreen;
+    if (m_isFullscreen) {
+        m_oldStyle = GetWindowLong(m_hwnd, GWL_STYLE);
+        m_oldExStyle = GetWindowLong(m_hwnd, GWL_EXSTYLE);
+        GetWindowRect(m_hwnd, &m_oldRect);
+
+        SetMenu(m_hwnd, NULL);
+        SetWindowLong(m_hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+        
+        ShowWindow(m_hStatusBar, SW_HIDE);
+        ShowWindow(m_hTreeView, SW_HIDE);
+        ShowWindow(m_hSearchEdit, SW_HIDE);
+        ShowWindow(m_hTabControl, SW_HIDE);
+
+        for (Session* s : m_sessions) {
+            SetParent(s->hEmbedded, m_hwnd);
+        }
+
+        HMONITOR hMon = MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi = { sizeof(mi) }; mi.cbSize = sizeof(mi);
+        if (GetMonitorInfo(hMon, &mi)) {
+            MoveWindow(m_hwnd, mi.rcMonitor.left, mi.rcMonitor.top,
+                mi.rcMonitor.right - mi.rcMonitor.left,
+                mi.rcMonitor.bottom - mi.rcMonitor.top, TRUE);
+        }
+    } else {
+        SetWindowLong(m_hwnd, GWL_STYLE, m_oldStyle);
+        SetWindowLong(m_hwnd, GWL_EXSTYLE, m_oldExStyle);
+        SetMenu(m_hwnd, m_hMenu);
+
+        ShowWindow(m_hStatusBar, SW_SHOW);
+        if (m_showSidebar) {
+            ShowWindow(m_hTreeView, SW_SHOW);
+            ShowWindow(m_hSearchEdit, SW_SHOW);
+        }
+        ShowWindow(m_hTabControl, SW_SHOW);
+
+        for (Session* s : m_sessions) {
+            SetParent(s->hEmbedded, m_hTabControl);
+        }
+
+        MoveWindow(m_hwnd, m_oldRect.left, m_oldRect.top,
+            m_oldRect.right - m_oldRect.left,
+            m_oldRect.bottom - m_oldRect.top, TRUE);
+    }
+    
+    // Resize current session
+    int sel = TabCtrl_GetCurSel(m_hTabControl);
+    if (sel != -1) {
+        TCITEM tie; tie.mask = TCIF_PARAM;
+        if (TabCtrl_GetItem(m_hTabControl, sel, &tie)) {
+            ResizeSession((Session*)tie.lParam);
+        }
+    }
+}
+
+void MainWindow::ToggleSidebar()
+{
+    m_showSidebar = !m_showSidebar;
+    ShowWindow(m_hTreeView, m_showSidebar ? SW_SHOW : SW_HIDE);
+    ShowWindow(m_hSearchEdit, m_showSidebar ? SW_SHOW : SW_HIDE);
+    
+    RECT rc; GetClientRect(m_hwnd, &rc);
+    OnSize(rc.right, rc.bottom);
+}
+
+void MainWindow::OnRenameTab()
+{
+    int sel = TabCtrl_GetCurSel(m_hTabControl);
+    if (sel == -1) return;
+    
+    TCITEM tie; tie.mask = TCIF_PARAM | TCIF_TEXT;
+    wchar_t buf[256]; tie.pszText = buf; tie.cchTextMax = 256;
+    if (TabCtrl_GetItem(m_hTabControl, sel, &tie)) {
+        Session* s = (Session*)tie.lParam;
+        if (DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_RENAME_TAB), m_hwnd, RenameTabDialogProc, (LPARAM)buf) == IDOK) {
+            s->name = buf;
+            tie.pszText = buf;
+            TabCtrl_SetItem(m_hTabControl, sel, &tie);
+            UpdateStatusBar();
+        }
+    }
+}
+
+void MainWindow::CloseOthers(int keepIndex)
+{
+    int count = TabCtrl_GetItemCount(m_hTabControl);
+    for (int i = count - 1; i >= 0; --i) {
+        if (i != keepIndex) CloseTab(i);
+    }
+}
+
+void MainWindow::CloseToRight(int index)
+{
+    int count = TabCtrl_GetItemCount(m_hTabControl);
+    for (int i = count - 1; i > index; --i) {
+        CloseTab(i);
+    }
+}
+
+void MainWindow::UpdateStatusBar()
+{
+    int sel = TabCtrl_GetCurSel(m_hTabControl);
+    if (sel != -1) {
+        TCITEM tie; tie.mask = TCIF_PARAM;
+        if (TabCtrl_GetItem(m_hTabControl, sel, &tie)) {
+            Session* s = (Session*)tie.lParam;
+            std::wstring txt = L"Connected: " + s->name + L" [" + s->conn.user + L"@" + s->conn.host + L":" + s->conn.port + L"]";
+            SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)txt.c_str());
+        }
+    } else {
+        SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)L"Ready");
+    }
+}
+
+INT_PTR CALLBACK MainWindow::RenameTabDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    static wchar_t* pName = NULL;
+    switch (message) {
+    case WM_INITDIALOG:
+        pName = (wchar_t*)lParam;
+        SetDlgItemText(hDlg, IDC_EDIT_NAME, pName);
+        return (INT_PTR)TRUE;
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            GetDlgItemText(hDlg, IDC_EDIT_NAME, pName, 256);
+            EndDialog(hDlg, IDOK); return (INT_PTR)TRUE;
+        }
+        if (LOWORD(wParam) == IDCANCEL) { EndDialog(hDlg, IDCANCEL); return (INT_PTR)TRUE; }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+

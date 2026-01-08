@@ -45,12 +45,22 @@ public:
     bool IsSourceOfFocus();
     void BroadcastKey(UINT msg, WPARAM wParam, LPARAM lParam);
 
+    // v1.1.0 Features
+    void ToggleFullscreen();
+    void ToggleSidebar();
+    void OnRenameTab();
+    void CloseOthers(int keepIndex);
+    void CloseToRight(int index);
+    void UpdateStatusBar();
+    static INT_PTR CALLBACK RenameTabDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
 private:
     HWND m_hwnd;
     HWND m_hTreeView;
     HWND m_hSearchEdit;
     HWND m_hTabControl;
     HWND m_hStatusBar;
+    HMENU m_hMenu;
 
     HIMAGELIST m_hImageList;
     HIMAGELIST m_hTabImageList;
@@ -64,9 +74,16 @@ private:
     int m_treeWidth;
     bool m_isResizing;
     bool m_broadcastMode;
+    bool m_isFullscreen;
+    bool m_showSidebar;
     HTREEITEM m_hDragItem;
     std::wstring m_puttyPath;
     std::wstring m_winscpPath;
+
+    // Fullscreen state
+    DWORD m_oldStyle;
+    DWORD m_oldExStyle;
+    RECT  m_oldRect;
 
     void OnCreate();
     void OnSize(int width, int height);

@@ -16,6 +16,7 @@
 #define IDD_QUICK_CONNECT   220
 #define IDD_CREDENTIAL_MANAGER 230
 #define IDD_CREDENTIAL_EDIT    240
+#define IDD_RENAME_TAB         250
 
 // Dialog Controls
 #define IDC_EDIT_NAME       201
@@ -69,6 +70,14 @@
 #define IDM_TAB_CLOSE       311
 #define IDM_TAB_CLOSE_ALL   312
 #define IDM_TAB_DUPLICATE   313
+#define IDM_TAB_CLOSE_OTHERS 314
+#define IDM_TAB_CLOSE_RIGHT 315
+#define IDM_TAB_RENAME      316
+
+#define IDM_VIEW_FULLSCREEN 330
+#define IDM_VIEW_SIDEBAR    331
+
+#define IDR_ACCELERATOR     401
 
 // Icons
 #define IDI_APPICON         400
