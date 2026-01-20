@@ -102,7 +102,7 @@ std::vector<Connection> ConnectionManager::LoadConnections() {
         
 
 bool ConnectionManager::ExportToJson(const std::wstring& filePath, const std::vector<Connection>& conns) {
-    std::wofstream file(filePath);
+    std::wofstream file(filePath.c_str());
     if (!file.is_open()) return false;
     file << L"[\n";
     for (size_t i = 0; i < conns.size(); ++i) {
@@ -123,7 +123,7 @@ bool ConnectionManager::ExportToJson(const std::wstring& filePath, const std::ve
 
 std::vector<Connection> ConnectionManager::ImportFromJson(const std::wstring& filePath) {
     std::vector<Connection> conns;
-    std::wifstream file(filePath);
+    std::wifstream file(filePath.c_str());
     if (!file.is_open()) return conns;
     std::wstringstream buffer; buffer << file.rdbuf();
     std::wstring content = buffer.str();

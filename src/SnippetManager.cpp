@@ -56,7 +56,7 @@ std::wstring Unescape(const std::wstring& s) {
 
 std::vector<Snippet> SnippetManager::LoadSnippets() {
     std::vector<Snippet> out;
-    std::wifstream f(GetConfigPath());
+    std::wifstream f(GetConfigPath().c_str());
     if (!f.is_open()) return out;
 
     std::wstring line;
@@ -73,7 +73,7 @@ std::vector<Snippet> SnippetManager::LoadSnippets() {
 }
 
 void SnippetManager::SaveSnippets(const std::vector<Snippet>& snippets) {
-    std::wofstream f(GetConfigPath());
+    std::wofstream f(GetConfigPath().c_str());
     if (!f.is_open()) return;
 
     for (const auto& s : snippets) {

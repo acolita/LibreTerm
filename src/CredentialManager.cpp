@@ -1,8 +1,41 @@
 #include "CredentialManager.h"
 #include <windows.h>
-#include <wincred.h>
 #include <sstream>
 
+// MinGW doesn't have wincred.h by default, so we conditionally compile
+#ifdef __MINGW32__
+// Stub implementation for MinGW builds - credentials stored in memory only (not persistent)
+#include <map>
+
+static std::map<std::wstring, Credential> g_credentialStore;
+
+std::vector<Credential> CredentialManager::LoadCredentials() {
+    std::vector<Credential> creds;
+    for (const auto& pair : g_credentialStore) {
+        creds.push_back(pair.second);
+    }
+    return creds;
+}
+
+void CredentialManager::SaveCredential(const Credential& cred) {
+    g_credentialStore[cred.alias] = cred;
+}
+
+void CredentialManager::DeleteCredential(const std::wstring& alias) {
+    g_credentialStore.erase(alias);
+}
+
+Credential CredentialManager::GetCredential(const std::wstring& alias) {
+    auto it = g_credentialStore.find(alias);
+    if (it != g_credentialStore.end()) {
+        return it->second;
+    }
+    return Credential();
+}
+
+#else
+// Full implementation using Windows Credential Manager
+#include <wincred.h>
 #pragma comment(lib, "Advapi32.lib")
 
 static const std::wstring PREFIX = L"LibreTerm:";
@@ -20,7 +53,7 @@ std::vector<Credential> CredentialManager::LoadCredentials() {
                 Credential c;
                 c.alias = target.substr(PREFIX.length());
                 c.username = pCreds[i]->UserName ? pCreds[i]->UserName : L"";
-                
+
                 // Blob contains: Password + | + KeyPath
                 if (pCreds[i]->CredentialBlobSize > 0) {
                     std::wstring blob((wchar_t*)pCreds[i]->CredentialBlob, pCreds[i]->CredentialBlobSize / sizeof(wchar_t));
@@ -64,7 +97,7 @@ Credential CredentialManager::GetCredential(const std::wstring& alias) {
     std::wstring target = PREFIX + alias;
     PCREDENTIALW pCred = NULL;
     Credential c;
-    
+
     if (CredReadW(target.c_str(), CRED_TYPE_GENERIC, 0, &pCred)) {
         c.alias = alias;
         c.username = pCred->UserName ? pCred->UserName : L"";
@@ -82,3 +115,4 @@ Credential CredentialManager::GetCredential(const std::wstring& alias) {
     }
     return c;
 }
+#endif
